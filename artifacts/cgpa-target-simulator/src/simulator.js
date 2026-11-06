@@ -125,7 +125,7 @@ function gradeOptions(selected) {
   return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
 }
 
-function semesterMarkup(term, index) {
+function semesterMarkup(term, index, collapsedSemesters = new Set()) {
   const courses = term.courses.map((c) => `
     <div class="course-row">
       <label class="sr-only" for="course-name-${c.id}">Course name</label>
@@ -138,19 +138,25 @@ function semesterMarkup(term, index) {
     </div>`).join('');
   const credits = term.courses.reduce((sum, c) => sum + numeric(c.creditHours), 0);
   const qps = term.courses.reduce((sum, c) => sum + numeric(c.creditHours) * (GRADE_POINTS[c.gradeEarned] ?? 0), 0);
+  const collapsed = collapsedSemesters.has(term.id);
   return `<article class="semester-card" data-semester-card="${escaped(term.id)}">
     <div class="semester-head">
-      <div class="semester-label"><span class="semester-index">${String(index + 1).padStart(2, '0')}</span>
+      <button type="button" class="accordion-toggle" data-action="toggle-semester" data-semester="${escaped(term.id)}" aria-expanded="${!collapsed}" aria-controls="semester-content-${escaped(term.id)}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${escaped(term.name || `semester ${index + 1}`)}">
+        <span class="semester-index">${String(index + 1).padStart(2, '0')}</span><span class="accordion-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="semester-label">
         <label class="sr-only" for="semester-name-${term.id}">Semester name</label>
         <input id="semester-name-${term.id}" class="semester-name" data-kind="semester-name" data-semester="${escaped(term.id)}" data-testid="input-semester-name-${escaped(term.id)}" aria-label="Semester name" value="${escaped(term.name)}">
       </div>
       <span class="semester-summary" data-term-summary="${escaped(term.id)}">${format(credits, 1)} cr · ${format(credits ? qps / credits : 0, 2)} GPA</span>
     </div>
-    <div class="course-table-head" aria-hidden="true"><span>Course</span><span style="text-align:right">Credits</span><span style="text-align:center">Grade</span><span></span></div>
-    ${courses || '<p class="semester-empty">No courses in this semester yet. Add one to include it in your projection.</p>'}
-    <div class="semester-actions">
-      <button type="button" class="link-action" data-action="add-course" data-semester="${escaped(term.id)}" data-testid="button-add-course-${escaped(term.id)}">＋ Add course</button>
-      <button type="button" class="text-button semester-remove" data-action="remove-semester" data-semester="${escaped(term.id)}" data-testid="button-remove-semester-${escaped(term.id)}" aria-label="Remove ${escaped(term.name || `semester ${index + 1}`)}">Remove semester</button>
+    <div id="semester-content-${escaped(term.id)}" class="semester-content" ${collapsed ? 'hidden' : ''}>
+      <div class="course-table-head" aria-hidden="true"><span>Course</span><span style="text-align:right">Credits</span><span style="text-align:center">Grade</span><span></span></div>
+      ${courses || '<p class="semester-empty">No courses in this semester yet. Add one to include it in your projection.</p>'}
+      <div class="semester-actions">
+        <button type="button" class="link-action" data-action="add-course" data-semester="${escaped(term.id)}" data-testid="button-add-course-${escaped(term.id)}">＋ Add course</button>
+        <button type="button" class="text-button semester-remove" data-action="remove-semester" data-semester="${escaped(term.id)}" data-testid="button-remove-semester-${escaped(term.id)}" aria-label="Remove ${escaped(term.name || `semester ${index + 1}`)}">Remove semester</button>
+      </div>
     </div>
   </article>`;
 }
@@ -167,48 +173,59 @@ function scenarioCourseMarkup(c) {
   </div>`;
 }
 
-function render(root, state, saved = true) {
+function render(root, state, saved = true, collapsedSemesters = new Set()) {
   const data = derive(state);
   const currentGpa = data.currentCumulativeGpa;
   const predictedGpa = data.predictedCgpa;
   const status = statusFor(data);
   const required = data.requiredFutureGpa;
+  const targetInputValue = state.target.targetCgpa === '' ? '' : Number(state.target.targetCgpa).toFixed(2);
   root.innerHTML = `
-    <div class="app-shell min-h-screen w-full">
+    <div class="app-shell dashboard-shell min-h-screen w-full">
       <header class="topbar mx-auto flex max-w-7xl items-center justify-between">
-        <a class="brand" href="/" aria-label="Studyline home" data-testid="link-home"><span class="brand-mark" aria-hidden="true">s.</span><span class="brand-name">studyline</span></a>
+        <a class="brand" href="/" aria-label="Studyline home" data-testid="link-home"><span class="brand-mark" aria-hidden="true">s.</span><span class="brand-name">studyline <span class="brand-context">ACADEMIC PLANNER</span></span></a>
         <div class="top-meta">
           <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${saved ? 'Saved on this device' : 'Saving…'}</span></span>
+          <button type="button" class="theme-toggle" data-action="toggle-theme" data-testid="button-theme-toggle" aria-label="Switch color theme" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
           <button type="button" class="text-button" data-action="reset" data-testid="button-reset">Reset sample data</button>
         </div>
       </header>
       <main class="main-content mx-auto w-full max-w-7xl">
-        <section class="intro" aria-labelledby="page-title">
-          <div><div class="eyebrow">A clearer way forward</div><h1 id="page-title">Make the goal<br>feel manageable.</h1>
-            <p class="intro-copy">Shape your plan one course at a time. Adjust a grade, credit, or target and see exactly what changes—no hidden assumptions.</p>
+        <section class="dashboard-intro" aria-labelledby="page-title">
+          <div><div class="eyebrow">YOUR DEGREE, IN FOCUS</div><h1 id="page-title">CGPA target simulator</h1>
+            <p class="intro-copy">Track your progress, adjust your goal, and see the grades you’ll need to get there.</p>
           </div>
-          <div class="intro-side"><strong>One term at a time.</strong><span>Your plan, in plain numbers</span></div>
+          <div class="academic-note"><span class="academic-note-mark" aria-hidden="true">↗</span><span><strong>Plan with confidence</strong><small>Every grade updates your outlook instantly.</small></span></div>
         </section>
-        <section class="dashboard-grid grid grid-cols-1 items-start gap-3 min-[701px]:grid-cols-[minmax(0,1.2fr)_minmax(280px,.8fr)] min-[901px]:grid-cols-[minmax(0,1.48fr)_minmax(310px,.82fr)] min-[901px]:gap-[18px]" aria-label="CGPA target simulator">
+        <section class="metric-grid" aria-label="CGPA summary">
+          <article class="metric-card metric-current"><span class="metric-label">Current CGPA</span><strong class="metric-value" data-testid="text-current-cgpa">${currentGpa === null ? '—' : format(currentGpa)}</strong><span class="metric-foot">${format(data.totalCreditsEarned, 0)} credits completed</span></article>
+          <article class="metric-card metric-target">
+            <div class="metric-label-row"><label class="metric-label" for="target-cgpa">Target CGPA</label><span class="metric-scale">OUT OF 4.0</span></div>
+            <div class="target-input-line"><input id="target-cgpa" class="goal-input" data-kind="target" data-key="targetCgpa" data-testid="input-target-cgpa" type="number" min="0" max="4" step="0.01" value="${escaped(targetInputValue)}" aria-label="Target CGPA" aria-describedby="goal-hint"><span>/ 4.0</span></div>
+            <input class="target-slider" data-kind="target" data-key="targetCgpa" data-testid="slider-target-cgpa" type="range" min="0" max="4" step="0.01" value="${escaped(targetInputValue)}" aria-label="Adjust target CGPA">
+            <span class="metric-foot" id="goal-hint">Drag to adjust your goal</span>
+          </article>
+          <article class="metric-card metric-required"><div class="metric-label-row"><span class="metric-label">Required remaining GPA</span><span class="status-badge ${status.kind}" data-testid="status-summary"><i></i>${status.kind === 'unreachable' ? 'Out of Reach' : status.kind === 'warning' ? 'Needs Push' : 'On Track'}</span></div><strong class="metric-value" data-testid="text-required-gpa">${formatRequired(required)}</strong><span class="metric-foot">Across remaining degree credits</span></article>
+        </section>
+        <section class="dashboard-grid grid grid-cols-1 items-start gap-3 min-[701px]:grid-cols-[minmax(0,1.2fr)_minmax(280px,.8fr)] min-[901px]:grid-cols-[minmax(0,1.48fr)_minmax(310px,.82fr)] min-[901px]:gap-[18px]" aria-label="Academic record and graduation plan">
           <section class="panel course-panel" aria-labelledby="courses-title">
             <div class="panel-heading"><div><div class="eyebrow">Your academic record</div><h2 class="panel-title" id="courses-title">Completed semesters</h2><p class="panel-kicker">Edit courses to reflect your transcript.</p></div>
               <span class="eyebrow" data-testid="text-semester-count">${state.semesters.length} ${state.semesters.length === 1 ? 'semester' : 'semesters'}</span>
             </div>
             <div class="semester-list" data-testid="list-semesters">
-              ${state.semesters.length ? state.semesters.map(semesterMarkup).join('') : `<div class="semester-card"><p class="semester-empty">No semesters added. Start with your completed coursework to build an accurate projection.</p></div>`}
+              ${state.semesters.length ? state.semesters.map((term, index) => semesterMarkup(term, index, collapsedSemesters)).join('') : `<div class="semester-card"><p class="semester-empty">No semesters added. Start with your completed coursework to build an accurate projection.</p></div>`}
             </div>
             <div class="course-footer"><button type="button" class="button button-soft" data-action="add-semester" data-testid="button-add-semester">＋ Add semester</button><span class="hint">Only completed courses count toward your current CGPA.</span></div>
           </section>
           <aside class="panel assumptions" aria-labelledby="plan-title">
-            <div class="eyebrow">The plan ahead</div><h2 class="panel-title" id="plan-title" style="margin-top:6px">Set your target</h2>
-            <div class="goal-field" style="margin-top:18px"><label for="target-cgpa">Target CGPA</label><div class="goal-input-wrap"><input id="target-cgpa" class="goal-input" data-kind="target" data-key="targetCgpa" data-testid="input-target-cgpa" type="number" min="0" max="4" step="0.01" value="${escaped(state.target.targetCgpa)}" aria-describedby="goal-hint"><span>/ 4.0</span></div><p class="hint" id="goal-hint">Your desired cumulative GPA on a 4.0 scale.</p></div>
+            <div class="eyebrow">Graduation plan</div><h2 class="panel-title" id="plan-title" style="margin-top:6px">Degree assumptions</h2>
             <div class="settings-grid">
               <div class="setting-control"><label class="input-label" for="graduation-credits">Total degree credits</label><input id="graduation-credits" class="setting-input" data-kind="target" data-key="graduationCredits" data-testid="input-graduation-credits" type="number" min="1" max="1000" step="1" value="${escaped(state.target.graduationCredits)}" aria-describedby="graduation-credits-hint"><p class="hint" id="graduation-credits-hint">Credits required to graduate; default 120.</p></div>
               <div class="setting-control"><label class="input-label" for="remaining-semesters">Semesters left</label><input id="remaining-semesters" class="setting-input" data-kind="target" data-key="remainingSemesters" data-testid="input-remaining-semesters" type="number" min="0" max="20" step="1" value="${escaped(state.target.remainingSemesters)}" aria-describedby="semesters-hint"><p class="hint" id="semesters-hint">Used to estimate credits per term.</p></div>
             </div>
             <section class="projection-box" aria-live="polite" aria-atomic="true">
               <div class="projection-label">Required GPA for remaining credits</div>
-              <div class="projection-value ${status.kind === 'unreachable' ? 'is-unreachable' : ''}" data-testid="text-required-gpa">${formatRequired(required)}</div>
+              <div class="projection-value ${status.kind === 'unreachable' ? 'is-unreachable' : ''}" data-testid="text-required-gpa-detail">${formatRequired(required)}</div>
               <p class="projection-copy" data-testid="text-projection-message">${status.copy}</p>
               <span class="status-pill ${status.kind}" data-testid="status-reachability"><span aria-hidden="true">${status.kind === 'success' ? '✓' : status.kind === 'warning' ? '!' : '×'}</span>${status.label}</span>
             </section>
@@ -223,6 +240,10 @@ function render(root, state, saved = true) {
             <p class="assumption-foot">A plan is a guide, not a promise. Check your university’s official repeat, rounding, and degree-credit rules.</p>
           </aside>
         </section>
+        <section class="panel chart-panel" aria-labelledby="trajectory-title">
+          <div class="panel-heading"><div><div class="eyebrow">Your progress</div><h2 class="panel-title" id="trajectory-title">Semester GPA trajectory</h2><p class="panel-kicker">Compare each completed semester with your target.</p></div><span class="chart-legend"><i></i> Semester GPA <i class="legend-target"></i> Target</span></div>
+          <div class="chart-wrap"><canvas id="trajectory-chart" role="img" aria-label="Line chart showing semester GPA and target GPA"></canvas><p class="chart-fallback" hidden>Chart is unavailable. Your semester grades are still included in the calculation.</p></div>
+        </section>
         <section class="panel scenario-panel" aria-labelledby="scenario-title">
           <div class="scenario-header">
             <div><div class="eyebrow">What-if simulation</div><h2 class="panel-title" id="scenario-title">Try upcoming courses</h2><p class="panel-kicker">Add possible courses and grades to see their effect without changing your completed record.</p></div>
@@ -234,11 +255,6 @@ function render(root, state, saved = true) {
           </div>
           <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
-        <section class="panel summary-strip" aria-label="Current academic standing">
-          <div class="summary-item"><span>Credits completed</span><strong data-testid="text-credits-earned">${format(data.totalCreditsEarned, 1)}<small>credits</small></strong></div>
-          <div class="summary-item"><span>Quality points earned</span><strong data-testid="text-quality-points">${format(data.totalQualityPoints, 1)}<small>points</small></strong></div>
-          <div class="summary-item"><span>Current CGPA</span><strong data-testid="text-summary-cgpa">${currentGpa === null ? '—' : format(currentGpa)}<small>out of 4.0</small></strong></div>
-        </section>
         <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span>Grade scale: A 4.0 · B+ 3.5 · B 3.0 · C+ 2.5 · C 2.0 · D+ 1.5 · D 1.0 · F 0.0</span></footer>
       </main>
     </div>`;
@@ -246,13 +262,24 @@ function render(root, state, saved = true) {
 
 function refreshOutputs(root, state, saved) {
   const data = derive(state), status = statusFor(data), required = data.requiredFutureGpa;
-  const set = (testid, value) => { const node = root.querySelector(`[data-testid="${testid}"]`); if (node) node.textContent = value; };
+  const set = (testid, value) => root.querySelectorAll(`[data-testid="${testid}"]`).forEach((node) => { node.textContent = value; });
   set('text-required-gpa', formatRequired(required));
+  set('text-required-gpa-detail', formatRequired(required));
   set('text-projection-message', status.copy);
   const reach = root.querySelector('[data-testid="status-reachability"]');
   if (reach) { reach.className = `status-pill ${status.kind}`; reach.innerHTML = `<span aria-hidden="true">${status.kind === 'success' ? '✓' : status.kind === 'warning' ? '!' : '×'}</span>${status.label}`; }
   const projected = root.querySelector('[data-testid="text-required-gpa"]');
   if (projected) projected.classList.toggle('is-unreachable', status.kind === 'unreachable');
+  const summaryStatus = root.querySelector('[data-testid="status-summary"]');
+  if (summaryStatus) {
+    summaryStatus.className = `status-badge ${status.kind}`;
+    summaryStatus.innerHTML = `<i></i>${status.kind === 'unreachable' ? 'Out of Reach' : status.kind === 'warning' ? 'Needs Push' : 'On Track'}`;
+  }
+  const goalValue = state.target.targetCgpa === '' ? '' : Number(state.target.targetCgpa).toFixed(2);
+  for (const selector of ['[data-testid="input-target-cgpa"]', '[data-testid="slider-target-cgpa"]']) {
+    const control = root.querySelector(selector);
+    if (control && control !== document.activeElement) control.value = goalValue;
+  }
   set('text-current-cgpa', data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa));
   set('text-target-quality-points', `${format(data.targetTotalQualityPoints, 1)} pts`);
   set('text-credits-to-graduation', `${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr`);
@@ -277,6 +304,62 @@ function refreshOutputs(root, state, saved) {
 export function mountSimulator(root) {
   let state = loadState();
   let saveTimer;
+  let chart = null;
+  const collapsedSemesters = new Set();
+  const updateChart = () => {
+    const canvas = root.querySelector('#trajectory-chart');
+    const fallback = root.querySelector('.chart-fallback');
+    const ChartConstructor = window.Chart;
+    if (!canvas || typeof ChartConstructor !== 'function') {
+      if (canvas) canvas.hidden = true;
+      if (fallback) fallback.hidden = false;
+      return;
+    }
+    if (fallback) fallback.hidden = true;
+    canvas.hidden = false;
+    if (chart) chart.destroy();
+    const labels = state.semesters.map((term, index) => term.name || `Semester ${index + 1}`);
+    const values = state.semesters.map((term) => {
+      const credits = term.courses.reduce((sum, item) => sum + numeric(item.creditHours), 0);
+      const points = term.courses.reduce((sum, item) => sum + numeric(item.creditHours) * (GRADE_POINTS[item.gradeEarned] ?? 0), 0);
+      return credits ? Number((points / credits).toFixed(3)) : null;
+    });
+    const target = numeric(state.target.targetCgpa, 0, 4);
+    const computed = getComputedStyle(document.documentElement);
+    const primary = computed.getPropertyValue('--primary').trim();
+    const foreground = computed.getPropertyValue('--foreground').trim();
+    const border = computed.getPropertyValue('--border').trim();
+    chart = new ChartConstructor(canvas, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Semester GPA', data: values, borderColor: `hsl(${primary})`, backgroundColor: `hsl(${primary} / .12)`, pointBackgroundColor: `hsl(${primary})`, pointRadius: 4, pointHoverRadius: 6, borderWidth: 3, tension: .32, spanGaps: false },
+        { label: 'Target CGPA', data: labels.map(() => target), borderColor: '#d39b37', pointRadius: 0, borderWidth: 2, borderDash: [6, 6], tension: 0, fill: false },
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${Number(context.parsed.y).toFixed(2)}` } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: `hsl(${foreground})`, maxRotation: 0, autoSkip: true }, border: { display: false } },
+          y: { min: 0, max: 4, ticks: { stepSize: 1, color: `hsl(${foreground})` }, grid: { color: `hsl(${border} / .7)` }, border: { display: false } },
+        },
+      },
+    });
+  };
+  const refresh = (saved = false) => { refreshOutputs(root, state, saved); updateChart(); };
+  const setTheme = (dark) => {
+    document.documentElement.classList.toggle('dark', dark);
+    try { localStorage.setItem('studyline.cgpa-theme', dark ? 'dark' : 'light'); } catch { /* storage may be unavailable */ }
+    const button = root.querySelector('[data-testid="button-theme-toggle"]');
+    if (button) {
+      button.setAttribute('aria-pressed', String(dark));
+      const label = button.querySelector('[data-theme-label]');
+      if (label) label.textContent = dark ? 'Light mode' : 'Dark mode';
+      const icon = button.querySelector('.theme-icon');
+      if (icon) icon.textContent = dark ? '☼' : '◐';
+    }
+    updateChart();
+  };
+  try { setTheme(localStorage.getItem('studyline.cgpa-theme') === 'dark'); } catch { setTheme(false); }
   const persist = () => {
     const indicator = root.querySelector('[data-testid="status-save"] .save-copy');
     if (indicator) indicator.textContent = 'Saving…';
@@ -286,7 +369,7 @@ export function mountSimulator(root) {
       refreshOutputs(root, state, true);
     }, 160);
   };
-  const paint = () => { render(root, state, true); refreshOutputs(root, state, true); };
+  const paint = () => { render(root, state, true, collapsedSemesters); refresh(true); setTheme(document.documentElement.classList.contains('dark')); };
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
 
   root.addEventListener('input', (event) => {
@@ -305,7 +388,7 @@ export function mountSimulator(root) {
       const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
       if (item) item[el.dataset.kind === 'scenario-name' ? 'name' : 'creditHours'] = el.dataset.kind === 'scenario-name' ? el.value : (el.value === '' ? '' : Number(el.value));
     }
-    refreshOutputs(root, state, false);
+    refresh(false);
     persist();
   });
   root.addEventListener('change', (event) => {
@@ -313,12 +396,12 @@ export function mountSimulator(root) {
     if (el instanceof HTMLSelectElement && el.dataset.kind === 'course-grade') {
       const item = findCourse(el.dataset.semester, el.dataset.course);
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
-      refreshOutputs(root, state, false);
+      refresh(false);
       persist();
     } else if (el instanceof HTMLSelectElement && el.dataset.kind === 'scenario-grade') {
       const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
-      refreshOutputs(root, state, false);
+      refresh(false);
       persist();
     }
   });
@@ -343,7 +426,7 @@ export function mountSimulator(root) {
         const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
         if (item) item.creditHours = normalized;
       }
-      refreshOutputs(root, state, false);
+      refresh(false);
       persist();
     }
   });
@@ -351,6 +434,16 @@ export function mountSimulator(root) {
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const { action, semester: termId, course: courseId } = button.dataset;
+    if (action === 'toggle-theme') {
+      setTheme(!document.documentElement.classList.contains('dark'));
+      return;
+    }
+    if (action === 'toggle-semester') {
+      if (collapsedSemesters.has(termId)) collapsedSemesters.delete(termId);
+      else collapsedSemesters.add(termId);
+      paint();
+      return;
+    }
     if (action === 'add-semester') state.semesters.push(semester(`Semester ${state.semesters.length + 1}`));
     if (action === 'remove-semester') state.semesters = state.semesters.filter((term) => term.id !== termId);
     if (action === 'add-course') {
