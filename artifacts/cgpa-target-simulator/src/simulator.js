@@ -6,7 +6,7 @@ const id = (prefix) => `${prefix}-${Date.now().toString(36)}-${nextId++}`;
 const course = (name = 'New course', grade = 'B', creditHours = 3) => ({ id: id('course'), name, creditHours, gradeEarned: grade });
 const semester = (name) => ({ id: id('semester'), name, courses: [] });
 
-function sampleState() {
+export function sampleState() {
   const semesterGrades = [
     [['Foundations of Biology', 'A'], ['Academic Writing', 'A'], ['Intro to Statistics', 'B+'], ['World History', 'B+'], ['Research Methods', 'B'], ['Environmental Studies', 'C+']],
     [['Cell Biology', 'A'], ['Writing & Rhetoric', 'A'], ['Data Analysis', 'B+'], ['Modern History', 'B+'], ['Lab Practice', 'B'], ['Ethics in Science', 'C+']],
@@ -16,7 +16,8 @@ function sampleState() {
       id: id('semester'), name: `Semester ${index + 1}`,
       courses: items.map(([name, grade]) => ({ id: id('course'), name, creditHours: 3, gradeEarned: grade })),
     })),
-    target: { targetCgpa: 3.6, remainingSemesters: 4, plannedCreditsPerSemester: 18 },
+    scenarioCourses: [],
+    target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
   };
 }
 
@@ -42,16 +43,22 @@ function loadState() {
         gradeEarned: GRADE_POINTS[c.gradeEarned] !== undefined ? c.gradeEarned : 'B',
       })) : [],
     }));
+    const scenarioCourses = Array.isArray(saved.scenarioCourses) ? saved.scenarioCourses.map((c) => ({
+      id: String(c.id || id('scenario')),
+      name: String(c.name ?? ''),
+      creditHours: c.creditHours === '' || c.creditHours == null ? '' : numeric(c.creditHours, 0, 1000),
+      gradeEarned: GRADE_POINTS[c.gradeEarned] !== undefined ? c.gradeEarned : 'B',
+    })) : [];
     const target = saved.target;
-    return { semesters, target: {
+    return { semesters, scenarioCourses, target: {
       targetCgpa: target.targetCgpa === '' || target.targetCgpa == null ? '' : numeric(target.targetCgpa, 0, 4),
+      graduationCredits: target.graduationCredits === '' ? '' : numeric(target.graduationCredits ?? 120, 0, 1000),
       remainingSemesters: target.remainingSemesters === '' || target.remainingSemesters == null ? '' : numeric(target.remainingSemesters, 0, 20),
-      plannedCreditsPerSemester: target.plannedCreditsPerSemester === '' || target.plannedCreditsPerSemester == null ? '' : numeric(target.plannedCreditsPerSemester, 0, 1000),
     } };
   } catch { return sampleState(); }
 }
 
-function derive(state) {
+export function derive(state) {
   let totalCreditsEarned = 0, totalQualityPoints = 0;
   for (const term of state.semesters) {
     for (const c of term.courses) {
@@ -63,34 +70,56 @@ function derive(state) {
       }
     }
   }
+  let scenarioCredits = 0, scenarioQualityPoints = 0;
+  for (const c of state.scenarioCourses) {
+    const credits = numeric(c.creditHours);
+    const points = GRADE_POINTS[c.gradeEarned];
+    if (credits > 0 && points !== undefined) {
+      scenarioCredits += credits;
+      scenarioQualityPoints += credits * points;
+    }
+  }
   const currentCumulativeGpa = totalCreditsEarned > 0 ? totalQualityPoints / totalCreditsEarned : null;
+  const projectedCredits = totalCreditsEarned + scenarioCredits;
+  const projectedQualityPoints = totalQualityPoints + scenarioQualityPoints;
+  const predictedCgpa = projectedCredits > 0 ? projectedQualityPoints / projectedCredits : null;
   const targetValid = state.target.targetCgpa !== '' && Number.isFinite(Number(state.target.targetCgpa)) && Number(state.target.targetCgpa) >= 0 && Number(state.target.targetCgpa) <= 4;
-  const planValid = state.target.remainingSemesters !== '' && state.target.plannedCreditsPerSemester !== ''
-    && Number.isFinite(Number(state.target.remainingSemesters)) && Number.isFinite(Number(state.target.plannedCreditsPerSemester));
+  const graduationCreditsValid = state.target.graduationCredits !== '' && Number.isFinite(Number(state.target.graduationCredits)) && Number(state.target.graduationCredits) > 0;
   const goal = numeric(state.target.targetCgpa, 0, 4);
+  const graduationCredits = numeric(state.target.graduationCredits, 0, 1000);
   const remainingSemesters = numeric(state.target.remainingSemesters, 0, 20);
-  const plannedCreditsPerSemester = numeric(state.target.plannedCreditsPerSemester, 0, 1000);
-  const futureCredits = remainingSemesters * plannedCreditsPerSemester;
-  const requiredFutureGpa = !targetValid || !planValid ? null : futureCredits > 0
-    ? (goal * (totalCreditsEarned + futureCredits) - totalQualityPoints) / futureCredits
-    : (currentCumulativeGpa !== null && currentCumulativeGpa >= goal ? 0 : null);
-  return { totalCreditsEarned, totalQualityPoints, currentCumulativeGpa, goal, remainingSemesters, plannedCreditsPerSemester, futureCredits, requiredFutureGpa, targetValid, planValid };
+  const targetTotalQualityPoints = goal * graduationCredits;
+  const remainingCreditsToGraduation = graduationCredits - totalCreditsEarned;
+  const remainingCreditsAfterScenario = graduationCredits - projectedCredits;
+  const averageCreditsPerRemainingSemester = remainingSemesters > 0 && remainingCreditsAfterScenario >= 0
+    ? remainingCreditsAfterScenario / remainingSemesters
+    : null;
+  const requiredFutureGpa = !targetValid || !graduationCreditsValid ? null
+    : remainingCreditsAfterScenario > 0
+      ? (targetTotalQualityPoints - projectedQualityPoints) / remainingCreditsAfterScenario
+      : projectedQualityPoints >= targetTotalQualityPoints ? 0 : Infinity;
+  return {
+    totalCreditsEarned, totalQualityPoints, currentCumulativeGpa,
+    scenarioCredits, scenarioQualityPoints, projectedCredits, projectedQualityPoints, predictedCgpa,
+    goal, graduationCredits, remainingSemesters, targetTotalQualityPoints, remainingCreditsToGraduation,
+    remainingCreditsAfterScenario, averageCreditsPerRemainingSemester, requiredFutureGpa, targetValid, graduationCreditsValid,
+  };
 }
 
-function statusFor(data) {
-  const { currentCumulativeGpa, goal, futureCredits, requiredFutureGpa } = data;
+export function statusFor(data) {
+  const { requiredFutureGpa, remainingCreditsAfterScenario, projectedQualityPoints, targetTotalQualityPoints } = data;
   if (!data.targetValid) return { kind: 'warning', label: 'Target needed', copy: 'Enter a target from 0.00 to 4.00 to see your projection.' };
-  if (!data.planValid) return { kind: 'warning', label: 'Plan details needed', copy: 'Enter both remaining semesters and planned credits per semester to calculate a useful average.' };
-  if (futureCredits <= 0) {
-    if (currentCumulativeGpa !== null && currentCumulativeGpa >= goal) return { kind: 'success', label: 'Goal already met', copy: 'Your current cumulative GPA is already at or above your target.' };
-    return { kind: 'warning', label: 'Add future credits', copy: 'Set remaining semesters and planned credits to calculate the GPA needed from here.' };
-  }
-  if (currentCumulativeGpa !== null && currentCumulativeGpa >= goal) return { kind: 'success', label: 'Goal already met', copy: 'You are at or above your target now. The calculation shows the average you can earn and still finish at your goal.' };
-  if (requiredFutureGpa > 4) return { kind: 'unreachable', label: 'Above the 4.0 scale', copy: 'This target is not reachable with the current credits and plan. Consider revising the target or timeline.' };
-  if (requiredFutureGpa <= 0) return { kind: 'success', label: 'Within reach', copy: 'You have enough quality points banked to reach this target with any passing average.' };
-  if (requiredFutureGpa >= 3.7) return { kind: 'warning', label: 'A focused stretch', copy: 'This is mathematically possible, but it calls for a consistently strong term average.' };
-  return { kind: 'success', label: 'Within reach', copy: 'This average across your remaining planned credits would bring you to your goal.' };
+  if (!data.graduationCreditsValid) return { kind: 'warning', label: 'Graduation credits needed', copy: 'Enter the total credit hours required for your degree.' };
+  if (data.remainingCreditsToGraduation < 0) return { kind: 'warning', label: 'Credits exceed degree total', copy: 'Your completed credits are higher than the graduation-credit setting. Check that total before using the projection.' };
+  if (data.remainingCreditsAfterScenario < 0) return { kind: 'warning', label: 'Scenario exceeds remaining credits', copy: 'These hypothetical courses exceed the credits still needed for graduation. Adjust the scenario or degree total.' };
+  if (requiredFutureGpa > 4) return { kind: 'unreachable', label: 'Mathematically Impossible', copy: 'This target would require more than a 4.0 average in the remaining graduation credits.' };
+  if (requiredFutureGpa < 2) return { kind: 'success', label: 'Easily Achievable', copy: 'The remaining average needed is below 2.0. The what-if courses are included in this calculation.' };
+  if (data.remainingCreditsAfterScenario === 0 && projectedQualityPoints >= targetTotalQualityPoints) return { kind: 'success', label: 'Goal met at graduation', copy: 'Your completed record and what-if courses meet the target quality points for the graduation-credit total.' };
+  if (requiredFutureGpa >= 3.7) return { kind: 'warning', label: 'A focused stretch', copy: 'This is possible on a 4.0 scale, but it calls for a consistently strong average in your remaining credits.' };
+  return { kind: 'success', label: 'Within reach', copy: 'This average across your remaining graduation credits would bring you to your goal.' };
 }
+
+const formatRequired = (value) => value === Infinity ? '∞' : value === null ? '—' : format(value);
 
 function gradeOptions(selected) {
   return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
@@ -126,9 +155,22 @@ function semesterMarkup(term, index) {
   </article>`;
 }
 
+function scenarioCourseMarkup(c) {
+  return `<div class="course-row scenario-row" data-scenario-row="${escaped(c.id)}">
+    <label class="sr-only" for="scenario-name-${escaped(c.id)}">Hypothetical course name</label>
+    <input id="scenario-name-${escaped(c.id)}" class="field" data-kind="scenario-name" data-course="${escaped(c.id)}" data-testid="input-scenario-name-${escaped(c.id)}" aria-label="Hypothetical course name" value="${escaped(c.name)}" placeholder="Course name">
+    <label class="sr-only" for="scenario-credits-${escaped(c.id)}">Credit hours</label>
+    <input id="scenario-credits-${escaped(c.id)}" class="field numeric" data-kind="scenario-credits" data-course="${escaped(c.id)}" data-testid="input-scenario-credits-${escaped(c.id)}" aria-label="Hypothetical course credit hours" type="number" min="0" max="1000" step="0.5" value="${escaped(c.creditHours)}" placeholder="0">
+    <label class="sr-only" for="scenario-grade-${escaped(c.id)}">Projected grade</label>
+    <select id="scenario-grade-${escaped(c.id)}" class="field grade" data-kind="scenario-grade" data-course="${escaped(c.id)}" data-testid="select-scenario-grade-${escaped(c.id)}" aria-label="Projected grade">${gradeOptions(c.gradeEarned)}</select>
+    <button type="button" class="button-icon" data-action="remove-scenario-course" data-course="${escaped(c.id)}" data-testid="button-remove-scenario-course-${escaped(c.id)}" aria-label="Remove ${escaped(c.name || 'hypothetical course')}">×</button>
+  </div>`;
+}
+
 function render(root, state, saved = true) {
   const data = derive(state);
   const currentGpa = data.currentCumulativeGpa;
+  const predictedGpa = data.predictedCgpa;
   const status = statusFor(data);
   const required = data.requiredFutureGpa;
   root.innerHTML = `
@@ -161,23 +203,36 @@ function render(root, state, saved = true) {
             <div class="eyebrow">The plan ahead</div><h2 class="panel-title" id="plan-title" style="margin-top:6px">Set your target</h2>
             <div class="goal-field" style="margin-top:18px"><label for="target-cgpa">Target CGPA</label><div class="goal-input-wrap"><input id="target-cgpa" class="goal-input" data-kind="target" data-key="targetCgpa" data-testid="input-target-cgpa" type="number" min="0" max="4" step="0.01" value="${escaped(state.target.targetCgpa)}" aria-describedby="goal-hint"><span>/ 4.0</span></div><p class="hint" id="goal-hint">Your desired cumulative GPA on a 4.0 scale.</p></div>
             <div class="settings-grid">
-              <div class="setting-control"><label class="input-label" for="remaining-semesters">Semesters left</label><input id="remaining-semesters" class="setting-input" data-kind="target" data-key="remainingSemesters" data-testid="input-remaining-semesters" type="number" min="0" max="20" step="1" value="${escaped(state.target.remainingSemesters)}" aria-describedby="semesters-hint"><p class="hint" id="semesters-hint">Future terms in your plan.</p></div>
-              <div class="setting-control"><label class="input-label" for="planned-credits">Credits per term</label><input id="planned-credits" class="setting-input" data-kind="target" data-key="plannedCreditsPerSemester" data-testid="input-planned-credits" type="number" min="0" max="1000" step="0.5" value="${escaped(state.target.plannedCreditsPerSemester)}" aria-describedby="credits-hint"><p class="hint" id="credits-hint">Your planned credit load each term.</p></div>
+              <div class="setting-control"><label class="input-label" for="graduation-credits">Total degree credits</label><input id="graduation-credits" class="setting-input" data-kind="target" data-key="graduationCredits" data-testid="input-graduation-credits" type="number" min="1" max="1000" step="1" value="${escaped(state.target.graduationCredits)}" aria-describedby="graduation-credits-hint"><p class="hint" id="graduation-credits-hint">Credits required to graduate; default 120.</p></div>
+              <div class="setting-control"><label class="input-label" for="remaining-semesters">Semesters left</label><input id="remaining-semesters" class="setting-input" data-kind="target" data-key="remainingSemesters" data-testid="input-remaining-semesters" type="number" min="0" max="20" step="1" value="${escaped(state.target.remainingSemesters)}" aria-describedby="semesters-hint"><p class="hint" id="semesters-hint">Used to estimate credits per term.</p></div>
             </div>
             <section class="projection-box" aria-live="polite" aria-atomic="true">
-              <div class="projection-label">Average needed in remaining credits</div>
-              <div class="projection-value ${status.kind === 'unreachable' ? 'is-unreachable' : ''}" data-testid="text-required-gpa">${required === null ? '—' : format(required)}</div>
+              <div class="projection-label">Required GPA for remaining credits</div>
+              <div class="projection-value ${status.kind === 'unreachable' ? 'is-unreachable' : ''}" data-testid="text-required-gpa">${formatRequired(required)}</div>
               <p class="projection-copy" data-testid="text-projection-message">${status.copy}</p>
               <span class="status-pill ${status.kind}" data-testid="status-reachability"><span aria-hidden="true">${status.kind === 'success' ? '✓' : status.kind === 'warning' ? '!' : '×'}</span>${status.label}</span>
             </section>
             <div class="breakdown"><h3 class="breakdown-title">How the projection works</h3>
               <div class="stat-row"><span>Current CGPA</span><strong data-testid="text-current-cgpa">${currentGpa === null ? '—' : format(currentGpa)}</strong></div>
-              <div class="stat-row"><span>Future credits planned</span><strong data-testid="text-future-credits">${format(data.futureCredits, 1)} cr</strong></div>
-              <div class="stat-row"><span>Credits at graduation</span><strong data-testid="text-total-credits">${format(data.totalCreditsEarned + data.futureCredits, 1)} cr</strong></div>
+              <div class="stat-row"><span>Target quality points needed</span><strong data-testid="text-target-quality-points">${format(data.targetTotalQualityPoints, 1)} pts</strong></div>
+              <div class="stat-row"><span>Credits still needed</span><strong data-testid="text-credits-to-graduation">${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr</strong></div>
+              <div class="stat-row"><span>Credits after this scenario</span><strong data-testid="text-remaining-after-scenario">${format(Math.max(0, data.remainingCreditsAfterScenario), 1)} cr</strong></div>
+              <div class="stat-row"><span>Average credits per remaining term</span><strong data-testid="text-average-credits-per-term">${format(data.averageCreditsPerRemainingSemester, 1)} cr</strong></div>
             </div>
-            <div class="scale-note"><span class="note-mark" aria-hidden="true">i</span><span>The required average uses your <strong>total credits and quality points</strong>, plus your planned future credit total. Future courses are not assumed to have any particular grade or individual credit size.</span></div>
+            <div class="scale-note"><span class="note-mark" aria-hidden="true">i</span><span>Target points = target CGPA × degree credits. What-if courses add their projected quality points and credits before the remaining GPA is calculated.</span></div>
             <p class="assumption-foot">A plan is a guide, not a promise. Check your university’s official repeat, rounding, and degree-credit rules.</p>
           </aside>
+        </section>
+        <section class="panel scenario-panel" aria-labelledby="scenario-title">
+          <div class="scenario-header">
+            <div><div class="eyebrow">What-if simulation</div><h2 class="panel-title" id="scenario-title">Try upcoming courses</h2><p class="panel-kicker">Add possible courses and grades to see their effect without changing your completed record.</p></div>
+            <div class="scenario-score" aria-live="polite"><span>Predicted CGPA</span><strong data-testid="text-predicted-cgpa">${predictedGpa === null ? '—' : format(predictedGpa)}</strong><small data-testid="text-scenario-summary">${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points</small></div>
+          </div>
+          <div class="course-table-head scenario-table-head" aria-hidden="true"><span>Hypothetical course</span><span style="text-align:right">Credits</span><span style="text-align:center">Projected grade</span><span></span></div>
+          <div class="scenario-list" data-testid="list-scenario-courses">
+            ${state.scenarioCourses.length ? state.scenarioCourses.map(scenarioCourseMarkup).join('') : '<p class="scenario-empty">No hypothetical courses yet. Add one to test how a future grade could change your predicted CGPA.</p>'}
+          </div>
+          <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
         <section class="panel summary-strip" aria-label="Current academic standing">
           <div class="summary-item"><span>Credits completed</span><strong data-testid="text-credits-earned">${format(data.totalCreditsEarned, 1)}<small>credits</small></strong></div>
@@ -192,15 +247,19 @@ function render(root, state, saved = true) {
 function refreshOutputs(root, state, saved) {
   const data = derive(state), status = statusFor(data), required = data.requiredFutureGpa;
   const set = (testid, value) => { const node = root.querySelector(`[data-testid="${testid}"]`); if (node) node.textContent = value; };
-  set('text-required-gpa', required === null ? '—' : format(required));
+  set('text-required-gpa', formatRequired(required));
   set('text-projection-message', status.copy);
   const reach = root.querySelector('[data-testid="status-reachability"]');
   if (reach) { reach.className = `status-pill ${status.kind}`; reach.innerHTML = `<span aria-hidden="true">${status.kind === 'success' ? '✓' : status.kind === 'warning' ? '!' : '×'}</span>${status.label}`; }
   const projected = root.querySelector('[data-testid="text-required-gpa"]');
   if (projected) projected.classList.toggle('is-unreachable', status.kind === 'unreachable');
   set('text-current-cgpa', data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa));
-  set('text-future-credits', `${format(data.futureCredits, 1)} cr`);
-  set('text-total-credits', `${format(data.totalCreditsEarned + data.futureCredits, 1)} cr`);
+  set('text-target-quality-points', `${format(data.targetTotalQualityPoints, 1)} pts`);
+  set('text-credits-to-graduation', `${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr`);
+  set('text-remaining-after-scenario', `${format(Math.max(0, data.remainingCreditsAfterScenario), 1)} cr`);
+  set('text-average-credits-per-term', `${format(data.averageCreditsPerRemainingSemester, 1)} cr`);
+  set('text-predicted-cgpa', data.predictedCgpa === null ? '—' : format(data.predictedCgpa));
+  set('text-scenario-summary', `${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points`);
   set('text-credits-earned', `${format(data.totalCreditsEarned, 1)} credits`);
   set('text-quality-points', `${format(data.totalQualityPoints, 1)} points`);
   set('text-summary-cgpa', `${data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa)} out of 4.0`);
@@ -242,6 +301,9 @@ export function mountSimulator(root) {
     } else if (el.dataset.kind === 'course-name' || el.dataset.kind === 'course-credits') {
       const item = findCourse(el.dataset.semester, el.dataset.course);
       if (item) item[el.dataset.kind === 'course-name' ? 'name' : 'creditHours'] = el.dataset.kind === 'course-name' ? el.value : (el.value === '' ? '' : Number(el.value));
+    } else if (el.dataset.kind === 'scenario-name' || el.dataset.kind === 'scenario-credits') {
+      const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
+      if (item) item[el.dataset.kind === 'scenario-name' ? 'name' : 'creditHours'] = el.dataset.kind === 'scenario-name' ? el.value : (el.value === '' ? '' : Number(el.value));
     }
     refreshOutputs(root, state, false);
     persist();
@@ -253,6 +315,11 @@ export function mountSimulator(root) {
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
       refreshOutputs(root, state, false);
       persist();
+    } else if (el instanceof HTMLSelectElement && el.dataset.kind === 'scenario-grade') {
+      const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
+      if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
+      refreshOutputs(root, state, false);
+      persist();
     }
   });
   root.addEventListener('focusout', (event) => {
@@ -260,6 +327,8 @@ export function mountSimulator(root) {
     if (!(el instanceof HTMLInputElement) || el.type !== 'number' || el.value === '') return;
     const bounds = el.dataset.key === 'targetCgpa' || el.id === 'target-cgpa'
       ? [0, 4]
+      : el.dataset.key === 'graduationCredits' || el.id === 'graduation-credits'
+        ? [1, 1000]
       : el.dataset.key === 'remainingSemesters' || el.id === 'remaining-semesters'
         ? [0, 20]
         : [0, 1000];
@@ -269,6 +338,9 @@ export function mountSimulator(root) {
       if (el.dataset.kind === 'target') state.target[el.dataset.key] = normalized;
       else if (el.dataset.kind === 'course-credits') {
         const item = findCourse(el.dataset.semester, el.dataset.course);
+        if (item) item.creditHours = normalized;
+      } else if (el.dataset.kind === 'scenario-credits') {
+        const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
         if (item) item.creditHours = normalized;
       }
       refreshOutputs(root, state, false);
@@ -289,12 +361,21 @@ export function mountSimulator(root) {
       const term = state.semesters.find((item) => item.id === termId);
       if (term) term.courses = term.courses.filter((item) => item.id !== courseId);
     }
+    if (action === 'add-scenario-course') state.scenarioCourses.push(course('Projected course', 'B', 3));
+    if (action === 'remove-scenario-course') state.scenarioCourses = state.scenarioCourses.filter((item) => item.id !== courseId);
     if (action === 'reset') {
       state = sampleState();
     }
     paint();
     persist();
-    if (action === 'add-course') root.querySelector(`[data-semester="${termId}"] [data-kind="course-name"]:last-of-type`)?.focus();
+    if (action === 'add-course') {
+      const inputs = root.querySelectorAll(`[data-kind="course-name"][data-semester="${termId}"]`);
+      inputs[inputs.length - 1]?.focus();
+    }
+    if (action === 'add-scenario-course') {
+      const inputs = root.querySelectorAll('[data-kind="scenario-name"]');
+      inputs[inputs.length - 1]?.focus();
+    }
   });
   paint();
   return () => { clearTimeout(saveTimer); root.replaceChildren(); };
