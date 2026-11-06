@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CGPA Target Simulator"
+description = "A responsive university CGPA simulator that tracks completed courses, target grades, and remaining semesters to graduation."
+version = "1.0.0"
+id = "artifacts/cgpa-target-simulator"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20284
+
+[services.development]
+run = "pnpm --filter @workspace/cgpa-target-simulator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cgpa-target-simulator", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cgpa-target-simulator/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20284"
+BASE_PATH = "/"
