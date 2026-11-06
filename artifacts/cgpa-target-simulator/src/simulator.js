@@ -21,6 +21,30 @@ export function sampleState() {
   };
 }
 
+function emptyState() {
+  return {
+    semesters: [],
+    scenarioCourses: [],
+    target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
+  };
+}
+
+function sampleCsState() {
+  const sample = [
+    [['Programming Fundamentals', 'A'], ['Discrete Mathematics', 'B+'], ['Computer Systems', 'B'], ['Calculus I', 'B+'], ['Academic Writing', 'A'], ['Digital Logic', 'B']],
+    [['Data Structures', 'A'], ['Object-Oriented Programming', 'A'], ['Database Systems', 'B+'], ['Computer Architecture', 'B'], ['Statistics for Computing', 'B+'], ['Technical Communication', 'A']],
+  ];
+  return {
+    semesters: sample.map((items, index) => ({
+      id: id('semester'),
+      name: `Semester ${index + 1}`,
+      courses: items.map(([name, grade]) => ({ id: id('course'), name, creditHours: 3, gradeEarned: grade })),
+    })),
+    scenarioCourses: [],
+    target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
+  };
+}
+
 const numeric = (value, min = 0, max = Infinity) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : 0;
@@ -187,7 +211,6 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
         <div class="top-meta">
           <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${saved ? 'Saved on this device' : 'Saving…'}</span></span>
           <button type="button" class="theme-toggle" data-action="toggle-theme" data-testid="button-theme-toggle" aria-label="Switch color theme" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
-          <button type="button" class="text-button" data-action="reset" data-testid="button-reset">Reset sample data</button>
         </div>
       </header>
       <main class="main-content mx-auto w-full max-w-7xl">
@@ -197,6 +220,13 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
           </div>
           <div class="academic-note"><span class="academic-note-mark" aria-hidden="true">↗</span><span><strong>Plan with confidence</strong><small>Every grade updates your outlook instantly.</small></span></div>
         </section>
+        <nav class="action-toolbar" aria-label="Plan actions">
+          <button type="button" class="button button-soft" data-action="export-json" data-testid="button-export-json"><span aria-hidden="true">↓</span> Export JSON</button>
+          <button type="button" class="button button-soft" data-action="print-summary" data-testid="button-print-summary"><span aria-hidden="true">▤</span> Print summary</button>
+          <button type="button" class="button button-soft" data-action="load-cs-sample" data-testid="button-load-cs-sample"><span aria-hidden="true">＋</span> Load Sample CS Degree Data</button>
+          <button type="button" class="button button-danger-soft" data-action="clear-data" data-testid="button-clear-data">Clear All Data</button>
+        </nav>
+        <div class="print-heading" aria-hidden="true"><strong>CGPA Target Simulator</strong><span>Personal study plan summary</span></div>
         <section class="metric-grid" aria-label="CGPA summary">
           <article class="metric-card metric-current"><span class="metric-label">Current CGPA</span><strong class="metric-value" data-testid="text-current-cgpa">${currentGpa === null ? '—' : format(currentGpa)}</strong><span class="metric-foot">${format(data.totalCreditsEarned, 0)} credits completed</span></article>
           <article class="metric-card metric-target">
@@ -257,6 +287,17 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
         </section>
         <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span>Grade scale: A 4.0 · B+ 3.5 · B 3.0 · C+ 2.5 · C 2.0 · D+ 1.5 · D 1.0 · F 0.0</span></footer>
       </main>
+      <dialog class="confirm-dialog" data-testid="dialog-confirmation" aria-labelledby="confirm-title" aria-describedby="confirm-copy">
+        <div class="confirm-dialog-content">
+          <span class="eyebrow">Please confirm</span>
+          <h2 id="confirm-title">Clear saved coursework?</h2>
+          <p id="confirm-copy">This removes saved semesters and hypothetical courses from this browser. Target and degree assumptions return to their defaults.</p>
+          <div class="confirm-actions">
+            <button type="button" class="button button-soft" data-action="cancel-confirmation" autofocus>Cancel</button>
+            <button type="button" class="button button-danger" data-action="confirm-action">Clear coursework</button>
+          </div>
+        </div>
+      </dialog>
     </div>`;
 }
 
@@ -303,8 +344,9 @@ function refreshOutputs(root, state, saved) {
 
 export function mountSimulator(root) {
   let state = loadState();
-  let saveTimer;
   let chart = null;
+  let pendingConfirmation = null;
+  let lastDialogTrigger = null;
   const collapsedSemesters = new Set();
   const updateChart = () => {
     const canvas = root.querySelector('#trajectory-chart');
@@ -363,14 +405,36 @@ export function mountSimulator(root) {
   const persist = () => {
     const indicator = root.querySelector('[data-testid="status-save"] .save-copy');
     if (indicator) indicator.textContent = 'Saving…';
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage may be unavailable */ }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       refreshOutputs(root, state, true);
-    }, 160);
+    } catch {
+      if (indicator) indicator.textContent = 'Could not save on this device';
+    }
   };
   const paint = () => { render(root, state, true, collapsedSemesters); refresh(true); setTheme(document.documentElement.classList.contains('dark')); };
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
+  const dialog = () => root.querySelector('[data-testid="dialog-confirmation"]');
+  const openConfirmation = (action, trigger) => {
+    const modal = dialog();
+    if (!modal || typeof modal.showModal !== 'function') return;
+    pendingConfirmation = action;
+    lastDialogTrigger = trigger;
+    const sample = action === 'sample';
+    modal.querySelector('#confirm-title').textContent = sample ? 'Load sample CS degree data?' : 'Clear saved coursework?';
+    modal.querySelector('#confirm-copy').textContent = sample
+      ? 'This replaces your current semesters and hypothetical courses with sample computer science coursework and resets the target assumptions.'
+      : 'This removes saved semesters and hypothetical courses from this browser. Target and degree assumptions return to their defaults.';
+    const confirmButton = modal.querySelector('[data-action="confirm-action"]');
+    confirmButton.textContent = sample ? 'Load sample data' : 'Clear coursework';
+    modal.showModal();
+  };
+  root.addEventListener('close', (event) => {
+    if (event.target !== dialog()) return;
+    pendingConfirmation = null;
+    lastDialogTrigger?.focus();
+    lastDialogTrigger = null;
+  }, true);
 
   root.addEventListener('input', (event) => {
     const el = event.target;
@@ -431,7 +495,7 @@ export function mountSimulator(root) {
     }
   });
   root.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-action]');
+    const button = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!button) return;
     const { action, semester: termId, course: courseId } = button.dataset;
     if (action === 'toggle-theme') {
@@ -442,6 +506,46 @@ export function mountSimulator(root) {
       if (collapsedSemesters.has(termId)) collapsedSemesters.delete(termId);
       else collapsedSemesters.add(termId);
       paint();
+      return;
+    }
+    if (action === 'export-json') {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `cgpa-plan-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+    if (action === 'print-summary') {
+      window.print();
+      return;
+    }
+    if (action === 'clear-data') {
+      openConfirmation('clear', button);
+      return;
+    }
+    if (action === 'load-cs-sample') {
+      openConfirmation('sample', button);
+      return;
+    }
+    if (action === 'cancel-confirmation') {
+      dialog()?.close();
+      return;
+    }
+    if (action === 'confirm-action') {
+      const confirmedAction = pendingConfirmation;
+      dialog()?.close();
+      if (confirmedAction === 'clear') state = emptyState();
+      else if (confirmedAction === 'sample') state = sampleCsState();
+      else return;
+      collapsedSemesters.clear();
+      paint();
+      persist();
+      root.querySelector(`[data-action="${confirmedAction === 'sample' ? 'load-cs-sample' : 'clear-data'}"]`)?.focus();
       return;
     }
     if (action === 'add-semester') state.semesters.push(semester(`Semester ${state.semesters.length + 1}`));
@@ -456,9 +560,6 @@ export function mountSimulator(root) {
     }
     if (action === 'add-scenario-course') state.scenarioCourses.push(course('Projected course', 'B', 3));
     if (action === 'remove-scenario-course') state.scenarioCourses = state.scenarioCourses.filter((item) => item.id !== courseId);
-    if (action === 'reset') {
-      state = sampleState();
-    }
     paint();
     persist();
     if (action === 'add-course') {
@@ -471,5 +572,5 @@ export function mountSimulator(root) {
     }
   });
   paint();
-  return () => { clearTimeout(saveTimer); root.replaceChildren(); };
+  return () => { root.replaceChildren(); };
 }

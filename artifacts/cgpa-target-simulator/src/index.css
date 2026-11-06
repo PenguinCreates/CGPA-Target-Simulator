@@ -199,3 +199,55 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
   .semester-name { width: 120px; }
   .chart-legend { font-size: 9px; gap: 4px; }
 }
+
+.action-toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 0 0 16px; }
+.action-toolbar .button { min-height: 38px; border: 1px solid hsl(var(--border)); font-size: 10px; }
+.action-toolbar .button span { font-size: 13px; }
+.button-danger-soft { color: hsl(var(--destructive)); background: hsl(var(--destructive) / .07); }
+.button-danger-soft:hover { background: hsl(var(--destructive) / .13); }
+.button-danger { color: hsl(var(--destructive-foreground)); background: hsl(var(--destructive)); }
+.button-danger:hover { filter: brightness(.94); }
+.confirm-dialog { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid hsl(var(--border)); border-radius: 16px; color: hsl(var(--foreground)); background: hsl(var(--card)); box-shadow: 0 22px 70px rgba(0,0,0,.22); }
+.confirm-dialog::backdrop { background: rgba(13, 28, 23, .54); backdrop-filter: blur(3px); }
+.confirm-dialog-content { padding: 25px; }
+.confirm-dialog h2 { margin: 9px 0 8px; font: 400 28px/1.1 var(--app-font-serif); }
+.confirm-dialog p { margin: 0; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 1.6; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+.confirm-actions .button { min-height: 40px; padding-inline: 14px; }
+.print-heading { display: none; }
+.dark .confirm-dialog { border-color: hsl(var(--border)); }
+@media (max-width: 700px) {
+  .action-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); justify-content: stretch; gap: 7px; margin: 0 0 14px; }
+  .action-toolbar .button { width: 100%; min-height: 42px; justify-content: center; padding: 8px; font-size: 9px; }
+  .action-toolbar [data-action="load-cs-sample"] { line-height: 1.25; }
+}
+@media print {
+  @page { size: auto; margin: 14mm; }
+  html, body, .dashboard-shell { min-width: 0 !important; color: #151b18 !important; background: #fff !important; }
+  .app-shell { padding: 0 !important; }
+  .topbar, .action-toolbar, .academic-note, .bottom-note, .accordion-toggle,
+  .semester-actions, .course-footer, .scenario-actions, .save-indicator,
+  .theme-toggle, .confirm-dialog, .chart-legend { display: none !important; }
+  .main-content { width: 100% !important; max-width: none !important; }
+  .print-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #bbb; font-size: 10pt; }
+  .print-heading strong { font-size: 16pt; }
+  .dashboard-intro { padding: 0 0 12px !important; }
+  .dashboard-intro h1 { font-size: 25pt !important; }
+  .metric-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; gap: 8px !important; }
+  .metric-card, .panel, .semester-card { color: #151b18 !important; background: #fff !important; border: 1px solid #bbb !important; box-shadow: none !important; break-inside: avoid; }
+  .dashboard-grid { grid-template-columns: minmax(0,1.5fr) minmax(220px,.8fr) !important; gap: 10px !important; }
+  .assumptions { position: static !important; }
+  .semester-content[hidden] { display: block !important; }
+  .course-panel, .assumptions, .chart-panel, .scenario-panel { padding: 12px !important; }
+  .chart-wrap { height: 170px !important; }
+  .course-row { grid-template-columns: minmax(100px,1fr) 50px 70px 0 !important; }
+  .course-row .button-icon { display: none !important; }
+  .field, .setting-input, .goal-input { color: #151b18 !important; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+  .goal-input { font-size: 18pt !important; }
+  .metric-value { font-size: 20pt !important; }
+  .scenario-score { border: 1px solid #bbb; background: #fff !important; }
+  .projection-box { color: #151b18 !important; background: #f2f4f2 !important; border: 1px solid #bbb; }
+  .projection-label, .projection-copy { color: #333 !important; }
+  .status-pill, .status-badge { border: 1px solid #aaa; background: #fff !important; color: #222 !important; }
+  .bottom-note { display: none !important; }
+}
