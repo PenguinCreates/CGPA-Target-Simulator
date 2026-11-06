@@ -1,0 +1,29 @@
+kind = "video"
+videoAspectRatio = "16:9"
+previewPath = "/cgpa-target-film/"
+title = "CGPA Target Film"
+description = "A short animated film introducing the university CGPA Target Simulator and its academic planning features."
+version = "1.0.0"
+id = "artifacts/cgpa-target-film"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/cgpa-target-film/" ]
+localPort = 21382
+
+[services.development]
+run = "pnpm --filter @workspace/cgpa-target-film run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cgpa-target-film", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cgpa-target-film/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21382"
+BASE_PATH = "/cgpa-target-film/"

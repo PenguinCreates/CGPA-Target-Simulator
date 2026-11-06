@@ -1,0 +1,1 @@
+- [Video audio generation](video-audio-generation.md) — music-generation access may be gated by paid-mode availability; follow the skill-approved fallback and disclose it.
