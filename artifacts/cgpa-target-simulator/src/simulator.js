@@ -520,14 +520,14 @@ export function mountSimulator(root) {
     state = saved.state;
     const theme = await readThemePreference();
     if (destroyed) return;
-    if (theme) {
-      setTheme(theme === 'dark');
-      void saveThemePreference(theme);
-    }
     ready = true;
     root.inert = false;
     root.setAttribute('aria-busy', 'false');
     paint(saved.source === 'indexeddb');
+    if (theme) {
+      setTheme(theme === 'dark');
+      void saveThemePreference(theme);
+    }
     if (saved.source !== 'indexeddb') await persist(true);
   })();
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
