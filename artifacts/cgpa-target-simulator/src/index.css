@@ -112,6 +112,8 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .top-meta { gap: 10px; }
 .theme-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 9px; color: hsl(var(--foreground)); background: hsl(var(--card)); font-size: 11px; transition: background .18s ease, border-color .18s ease; }
 .theme-toggle:hover { background: hsl(var(--secondary)); }
+.install-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 9px; color: hsl(var(--primary)); background: hsl(var(--card)); font-size: 11px; font-weight: 700; }
+.install-button:hover { background: hsl(var(--secondary)); }
 .theme-icon { font-size: 15px; line-height: 1; }
 .dashboard-intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding: 36px 0 22px; }
 .dashboard-intro h1 { margin: 8px 0 7px; font: 400 clamp(32px, 4vw, 46px)/1 var(--app-font-serif); }

@@ -215,6 +215,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
         <a class="brand" href="/" aria-label="Studyline home" data-testid="link-home"><span class="brand-mark" aria-hidden="true">s.</span><span class="brand-name">studyline <span class="brand-context">ACADEMIC PLANNER</span></span></a>
         <div class="top-meta">
           <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…'}</span></span>
+          <button type="button" class="install-button" data-action="install-app" data-testid="button-install-app">＋ Add app</button>
           <button type="button" class="theme-toggle" data-action="toggle-theme" data-testid="button-theme-toggle" aria-label="Switch color theme" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
         </div>
       </header>
@@ -303,6 +304,14 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
           </div>
         </div>
       </dialog>
+      <dialog class="confirm-dialog install-dialog" data-testid="dialog-install" aria-labelledby="install-title" aria-describedby="install-copy">
+        <div class="confirm-dialog-content">
+          <span class="eyebrow">Use Studyline like an app</span>
+          <h2 id="install-title">Add Studyline to your Home Screen</h2>
+          <p id="install-copy"><strong>On iPhone or iPad:</strong> open this page in Safari, tap Share, choose “Add to Home Screen,” then tap Add. <br><br><strong>On other devices:</strong> choose “Install app” or “Add to Home screen” from your browser menu.</p>
+          <div class="confirm-actions"><button type="button" class="button button-primary" data-action="close-install">Got it</button></div>
+        </div>
+      </dialog>
     </div>`;
 }
 
@@ -365,6 +374,7 @@ export function mountSimulator(root) {
   let pendingSave = false;
   let saveInFlight = false;
   let saveTimer = null;
+  let deferredInstallPrompt = null;
   const collapsedSemesters = new Set();
   const drawChart = () => {
     const canvas = root.querySelector('#trajectory-chart');
@@ -552,6 +562,20 @@ export function mountSimulator(root) {
     lastDialogTrigger?.focus();
     lastDialogTrigger = null;
   }, true);
+  const captureInstallPrompt = (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+  };
+  const clearInstallPrompt = () => {
+    deferredInstallPrompt = null;
+    const button = root.querySelector('[data-testid="button-install-app"]');
+    if (button) {
+      button.textContent = 'Added';
+      button.setAttribute('aria-label', 'Studyline is installed');
+    }
+  };
+  window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+  window.addEventListener('appinstalled', clearInstallPrompt);
 
   root.addEventListener('input', (event) => {
     if (!ready) return;
@@ -621,6 +645,21 @@ export function mountSimulator(root) {
     const { action, semester: termId, course: courseId } = button.dataset;
     if (action === 'toggle-theme') {
       setTheme(!document.documentElement.classList.contains('dark'), true);
+      return;
+    }
+    if (action === 'install-app') {
+      if (deferredInstallPrompt) {
+        const installPrompt = deferredInstallPrompt;
+        deferredInstallPrompt = null;
+        void installPrompt.prompt();
+      } else {
+        const installDialog = root.querySelector('[data-testid="dialog-install"]');
+        if (installDialog && !installDialog.open) installDialog.showModal();
+      }
+      return;
+    }
+    if (action === 'close-install') {
+      root.querySelector('[data-testid="dialog-install"]')?.close();
       return;
     }
     if (action === 'toggle-semester') {
@@ -708,6 +747,8 @@ export function mountSimulator(root) {
   const flushOnPageHide = () => { if (pendingSave) void flushSave(); };
   window.addEventListener('pagehide', flushOnPageHide);
   return () => {
+    window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+    window.removeEventListener('appinstalled', clearInstallPrompt);
     window.removeEventListener('pagehide', flushOnPageHide);
     if (chartObserver) chartObserver.disconnect();
     if (chartIdleHandle !== null) {
