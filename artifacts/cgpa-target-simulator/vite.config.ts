@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -48,7 +48,12 @@ function offlineShellPlugin(): Plugin {
       const files = [...new Set(['index.html', ...Object.keys(bundle), ...publicFiles])]
         .filter((file) => file !== 'service-worker.js')
         .sort();
-      const version = createHash('sha256').update(files.join('\n')).digest('hex').slice(0, 12);
+      const versionHash = createHash('sha256').update(files.join('\n'));
+      for (const file of publicFiles) {
+        versionHash.update(file);
+        versionHash.update(readFileSync(path.resolve(import.meta.dirname, 'public', file)));
+      }
+      const version = versionHash.digest('hex').slice(0, 12);
       const precacheUrls = files.map((file) => `${basePath}${file}`);
       const worker = `
 const CACHE_NAME = 'studyline-shell-${version}';
