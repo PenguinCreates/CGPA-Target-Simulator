@@ -12,7 +12,7 @@ globalThis.localStorage = (() => {
   };
 })();
 
-const { derive, parseImportedState, statusFor } = await import('../src/simulator.js');
+const { derive, parseImportedState, statusFor, summarizeSemester } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
 const { calculate: calculateMobile } = await import('../../cgpa-target-mobile/lib/cgpa-calculations.ts');
 
@@ -76,6 +76,37 @@ test('calculates weighted CGPA and future GPA from course credits', () => {
   assert.equal(metrics.predictedCgpa, 19 / 6);
   assert.equal(metrics.remainingCreditsAfterScenario, 2);
   assert.equal(metrics.requiredFutureGpa, 2.5);
+});
+
+test('semester credit totals and GPA follow course credit and contents changes', () => {
+  const term = {
+    id: 'term-1',
+    name: 'Semester 1',
+    courses: [
+      { id: 'a', name: 'A course', creditHours: 3, gradeEarned: 'A' },
+      { id: 'b', name: 'B course', creditHours: 2, gradeEarned: 'B' },
+    ],
+  };
+
+  assert.deepEqual(summarizeSemester(term), {
+    credits: 5,
+    gpa: 3.6,
+    label: '5.0 completed credits · 3.60 GPA',
+  });
+
+  term.courses[0].creditHours = 4;
+  assert.deepEqual(summarizeSemester(term), {
+    credits: 6,
+    gpa: 11 / 3,
+    label: '6.0 completed credits · 3.67 GPA',
+  });
+
+  term.courses.pop();
+  assert.deepEqual(summarizeSemester(term), {
+    credits: 4,
+    gpa: 4,
+    label: '4.0 completed credits · 4.00 GPA',
+  });
 });
 
 test('flags targets that require more than a 4.0 average', () => {

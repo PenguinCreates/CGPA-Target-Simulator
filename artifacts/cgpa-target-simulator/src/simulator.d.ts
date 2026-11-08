@@ -30,6 +30,11 @@ export type SimulatorMetrics = CgpaMetrics;
 export function sampleState(): SimulatorState;
 export function parseImportedState(value: unknown): SimulatorState;
 export function derive(state: SimulatorState): SimulatorMetrics;
+export function summarizeSemester(term: Semester): {
+  credits: number;
+  gpa: number;
+  label: string;
+};
 export function statusFor(data: SimulatorMetrics): {
   kind: 'warning' | 'success' | 'unreachable';
   label: string;

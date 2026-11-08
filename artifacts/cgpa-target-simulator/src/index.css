@@ -156,7 +156,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .accordion-toggle[aria-expanded="true"] .accordion-chevron { transform: rotate(180deg); }
 .semester-label { flex: 1; }
 .semester-name { max-width: 210px; }
-.semester-summary { margin-left: auto; }
+.semester-summary { margin-left: auto; font-variant-numeric: tabular-nums; }
 .semester-content[hidden] { display: none; }
 .semester-content { padding-top: 12px; }
 .course-table-head, .course-row { grid-template-columns: minmax(100px,1fr) 66px 80px 28px; gap: 7px; }
