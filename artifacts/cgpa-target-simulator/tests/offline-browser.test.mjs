@@ -254,6 +254,9 @@ test("the dashboard remains editable after offline reload and saves edits after 
       "changing the target should recalculate the required GPA",
     );
 
+    const chartBeforeGradeChange = await page
+      .locator("#trajectory-chart")
+      .evaluate((canvas) => canvas.toDataURL());
     const firstCourse = page
       .locator('[data-testid^="input-course-name-"]')
       .first();
@@ -263,6 +266,13 @@ test("the dashboard remains editable after offline reload and saves edits after 
       .locator('[data-testid^="select-course-grade-"]')
       .first();
     await firstGrade.selectOption("C");
+    await page.waitForFunction(
+      (previousImage) => {
+        const canvas = document.querySelector("#trajectory-chart");
+        return canvas && canvas.toDataURL() !== previousImage;
+      },
+      chartBeforeGradeChange,
+    );
     await page
       .locator('[data-testid="status-save"]')
       .getByText("Saved offline on this device")
