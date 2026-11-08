@@ -217,7 +217,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .load-menu-trigger { list-style: none; cursor: pointer; user-select: none; }
 .load-menu-trigger::-webkit-details-marker { display: none; }
 .load-menu-options { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: min(240px, calc(100vw - 32px)); padding: 5px; border: 1px solid hsl(var(--border)); border-radius: 11px; background: hsl(var(--card)); box-shadow: 0 12px 32px rgba(20, 44, 74, .16); }
-.load-menu-option { display: block; width: 100%; padding: 10px 11px; border: 0; border-radius: 7px; color: hsl(var(--foreground)); background: transparent; text-align: left; font-size: 12px; }
+.load-menu-option { display: block; width: 100%; padding: 10px 11px; border: 0; border-radius: 7px; color: hsl(var(--foreground)); background: transparent; text-align: center; font-size: 12px; }
 .load-menu-option:hover, .load-menu-option:focus-visible { color: hsl(var(--primary)); background: hsl(var(--primary) / .09); }
 .import-feedback { margin: -6px 0 14px; padding: 10px 12px; border: 1px solid hsl(var(--destructive) / .25); border-radius: 9px; color: hsl(var(--destructive)); background: hsl(var(--destructive) / .06); font-size: 12px; }
 .import-feedback[hidden] { display: none; }
