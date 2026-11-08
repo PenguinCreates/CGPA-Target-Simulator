@@ -9,9 +9,12 @@
  * Zero external dependencies — uses only Node.js built-ins (http, fs, path).
  */
 
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+import * as http from 'node:http';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
