@@ -165,6 +165,12 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .chart-wrap { position: relative; height: 250px; margin-top: 20px; }
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
 .chart-fallback { padding: 36px 0; color: hsl(var(--muted-foreground)); text-align: center; font-size: 12px; }
+.chart-text-summary { margin-top: 18px; }
+.chart-summary-table { width: 100%; border-collapse: collapse; color: hsl(var(--foreground)); font-size: 12px; text-align: left; }
+.chart-summary-table th, .chart-summary-table td { padding: 9px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.chart-summary-table thead th { color: hsl(var(--muted-foreground)); font-size: 10px; font-weight: 600; }
+.chart-summary-table td:not(:first-child), .chart-summary-table thead th:not(:first-child) { text-align: right; font-family: var(--app-font-mono); }
+.chart-summary-table tbody th { font-weight: 500; }
 .scenario-panel { margin-top: 18px; padding: 22px; }
 .assumptions { top: 16px; }
 .projection-box { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }

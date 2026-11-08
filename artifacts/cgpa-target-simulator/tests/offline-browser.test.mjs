@@ -187,6 +187,17 @@ test("the dashboard remains editable after offline reload and saves edits after 
       await page.locator('[data-testid="text-semester-count"]').innerText(),
       /^2 semesters$/i,
     );
+    const semesterSummary = page.locator('[data-testid="table-semester-gpa"]');
+    const semesterRows = semesterSummary.locator("tbody tr");
+    assert.equal(await semesterRows.count(), 2);
+    assert.equal(
+      await semesterRows.first().locator('[data-column="semester-gpa"]').innerText(),
+      "3.42",
+    );
+    assert.equal(
+      await semesterRows.first().locator('[data-column="target-gpa"]').innerText(),
+      "3.60",
+    );
 
     const chart = page.locator("#trajectory-chart");
     await chart.scrollIntoViewIfNeeded();
@@ -253,6 +264,11 @@ test("the dashboard remains editable after offline reload and saves edits after 
       originalRequiredGpa,
       "changing the target should recalculate the required GPA",
     );
+    assert.equal(
+      await semesterRows.first().locator('[data-column="target-gpa"]').innerText(),
+      "3.95",
+      "the text summary should track the chart target",
+    );
 
     const chartBeforeGradeChange = await page
       .locator("#trajectory-chart")
@@ -273,6 +289,38 @@ test("the dashboard remains editable after offline reload and saves edits after 
       },
       chartBeforeGradeChange,
     );
+    assert.equal(
+      await semesterRows.first().locator('[data-column="semester-gpa"]').innerText(),
+      "3.08",
+      "the text summary should recalculate when a course grade changes",
+    );
+
+    await page
+      .locator('[data-testid^="input-semester-name-"]')
+      .first()
+      .fill("Fall 2026");
+    assert.equal(
+      await semesterRows.first().locator("th[scope='row']").innerText(),
+      "Fall 2026",
+      "the text summary should track semester name changes",
+    );
+    await page.locator('[data-testid="button-add-semester"]').click();
+    assert.equal(await semesterRows.count(), 3);
+    assert.equal(
+      await semesterRows.nth(2).locator('[data-column="semester-gpa"]').innerText(),
+      "No GPA",
+      "an empty semester should be identified as having no GPA",
+    );
+    assert.equal(
+      await semesterRows.nth(2).locator('[data-column="target-gpa"]').innerText(),
+      "3.95",
+    );
+    await page
+      .locator('[data-testid^="button-remove-semester-"]')
+      .nth(2)
+      .click();
+    assert.equal(await semesterRows.count(), 2);
+
     await page
       .locator('[data-testid="status-save"]')
       .getByText("Saved offline on this device")
