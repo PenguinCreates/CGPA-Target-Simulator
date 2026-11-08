@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Studyline CGPA Mobile",
-    "slug": "cgpa-target-mobile",
+    "name": "Studyline CGPA Tracker",
+    "slug": "studylinecgpatracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "cgpa-target-mobile",
+    "scheme": "studylinecgpatracker",
     "userInterfaceStyle": "automatic",
     "splash": {
       "backgroundColor": "#edf4fa",
@@ -13,14 +13,19 @@
       "resizeMode": "contain"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.studylinecgpatracker.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.studylinecgpatracker.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "output": "static"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
