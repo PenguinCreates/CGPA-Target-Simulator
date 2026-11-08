@@ -28,6 +28,7 @@ export type SimulatorState = {
 export type SimulatorMetrics = CgpaMetrics;
 
 export function sampleState(): SimulatorState;
+export function parseImportedState(value: unknown): SimulatorState;
 export function derive(state: SimulatorState): SimulatorMetrics;
 export function statusFor(data: SimulatorMetrics): {
   kind: 'warning' | 'success' | 'unreachable';

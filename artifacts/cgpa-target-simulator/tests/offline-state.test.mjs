@@ -12,7 +12,7 @@ globalThis.localStorage = (() => {
   };
 })();
 
-const { derive, statusFor } = await import('../src/simulator.js');
+const { derive, parseImportedState, statusFor } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
 const { calculate: calculateMobile } = await import('../../cgpa-target-mobile/lib/cgpa-calculations.ts');
 
@@ -85,6 +85,22 @@ test('flags targets that require more than a 4.0 average', () => {
   });
   assert.equal(metrics.requiredFutureGpa, 4.25);
   assert.equal(statusFor(metrics).kind, 'unreachable');
+});
+
+test('imports an exported plan and normalizes it for the tracker', () => {
+  const exported = sharedPlan({
+    completed: [{ id: 'course-a', name: 'Calculus', creditHours: 3, gradeEarned: 'A' }],
+    scenarios: [{ id: 'future-a', name: 'Physics', creditHours: 4, gradeEarned: 'B+' }],
+    targetCgpa: 3.4,
+    graduationCredits: 124,
+    remainingSemesters: 5,
+  });
+  assert.deepEqual(parseImportedState(JSON.parse(JSON.stringify(exported))), exported);
+});
+
+test('rejects malformed or oversized plan exports instead of replacing saved work', () => {
+  assert.throws(() => parseImportedState({ target: {} }), /valid Studyline plan export/);
+  assert.throws(() => parseImportedState({ semesters: Array(101).fill({ courses: [] }), target: {} }), /too many semesters/);
 });
 
 test('mobile and simulator use the same credit weighting across every supported grade', () => {

@@ -83,6 +83,26 @@ function normalizeState(saved) {
   }
 }
 
+export function parseImportedState(value) {
+  const invalid = () => new Error('This file is not a valid Studyline plan export.');
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      !Array.isArray(value.semesters) || !value.target || typeof value.target !== 'object' || Array.isArray(value.target)) {
+    throw invalid();
+  }
+  if (value.semesters.length > 100) throw new Error('This plan has too many semesters to import.');
+  let courseCount = 0;
+  for (const term of value.semesters) {
+    if (!term || typeof term !== 'object' || !Array.isArray(term.courses)) throw invalid();
+    courseCount += term.courses.length;
+    if (term.courses.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) throw invalid();
+  }
+  if (value.scenarioCourses !== undefined && !Array.isArray(value.scenarioCourses)) throw invalid();
+  if (value.scenarioCourses?.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) throw invalid();
+  courseCount += value.scenarioCourses?.length ?? 0;
+  if (courseCount > 1000) throw new Error('This plan has too many courses to import.');
+  return normalizeState(value);
+}
+
 async function loadState() {
   const stored = await readSavedState();
   return { state: normalizeState(stored.value), source: stored.source };
@@ -186,9 +206,17 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
         <nav class="action-toolbar" aria-label="Plan actions">
           <button type="button" class="button button-soft" data-action="export-json" data-testid="button-export-json"><span aria-hidden="true">↓</span> Export JSON</button>
           <button type="button" class="button button-soft" data-action="print-summary" data-testid="button-print-summary"><span aria-hidden="true">▤</span> Print summary</button>
-          <button type="button" class="button button-soft" data-action="load-cs-sample" data-testid="button-load-cs-sample"><span aria-hidden="true">＋</span> Load Sample CS Degree Data</button>
+          <details class="load-menu" data-testid="details-load-plan">
+            <summary class="button button-soft load-menu-trigger" data-testid="button-load-plan" aria-label="Choose a plan to load">Load plan <span aria-hidden="true">⌄</span></summary>
+            <div class="load-menu-options">
+              <button type="button" class="load-menu-option" data-action="load-cs-sample" data-testid="button-load-cs-sample">Load sample CS degree data</button>
+              <button type="button" class="load-menu-option" data-action="select-import-json" data-testid="button-import-json">Import exported JSON</button>
+            </div>
+          </details>
           <button type="button" class="button button-danger-soft" data-action="clear-data" data-testid="button-clear-data">Clear All Data</button>
         </nav>
+        <input type="file" accept=".json,application/json" hidden data-testid="input-import-json">
+        <p class="import-feedback" data-testid="import-feedback" role="alert" hidden></p>
         <div class="print-heading" aria-hidden="true"><strong>CGPA Target Simulator</strong><span>Personal study plan summary</span></div>
         <section class="metric-grid" aria-label="CGPA summary">
           <article class="metric-card metric-current"><span class="metric-label">Current CGPA</span><strong class="metric-value" data-testid="text-current-cgpa">${currentGpa === null ? '—' : format(currentGpa)}</strong><span class="metric-foot">${format(data.totalCreditsEarned, 0)} credits completed</span></article>
@@ -324,6 +352,7 @@ export function mountSimulator(root) {
   let chartIdleHandle = null;
   let chartIdleUsesTimeout = false;
   let pendingConfirmation = null;
+  let pendingImportState = null;
   let lastDialogTrigger = null;
   let ready = false;
   let destroyed = false;
@@ -505,17 +534,23 @@ export function mountSimulator(root) {
     pendingConfirmation = action;
     lastDialogTrigger = trigger;
     const sample = action === 'sample';
-    modal.querySelector('#confirm-title').textContent = sample ? 'Load sample CS degree data?' : 'Clear saved coursework?';
+    const importing = action === 'import';
+    modal.querySelector('#confirm-title').textContent = sample
+      ? 'Load sample CS degree data?'
+      : importing ? 'Import this exported plan?' : 'Clear saved coursework?';
     modal.querySelector('#confirm-copy').textContent = sample
       ? 'This replaces your current semesters and hypothetical courses with sample computer science coursework and resets the target assumptions.'
-      : 'This removes saved semesters and hypothetical courses from this browser. Target and degree assumptions return to their defaults.';
+      : importing
+        ? 'This replaces the plan currently saved on this device with the selected JSON file.'
+        : 'This removes saved semesters and hypothetical courses from this browser. Target and degree assumptions return to their defaults.';
     const confirmButton = modal.querySelector('[data-action="confirm-action"]');
-    confirmButton.textContent = sample ? 'Load sample data' : 'Clear coursework';
+    confirmButton.textContent = sample ? 'Load sample data' : importing ? 'Import plan' : 'Clear coursework';
     modal.showModal();
   };
   root.addEventListener('close', (event) => {
     if (event.target !== dialog()) return;
     pendingConfirmation = null;
+    pendingImportState = null;
     lastDialogTrigger?.focus();
     lastDialogTrigger = null;
   }, true);
@@ -557,6 +592,32 @@ export function mountSimulator(root) {
   root.addEventListener('change', (event) => {
     if (!ready) return;
     const el = event.target;
+    if (el instanceof HTMLInputElement && el.matches('[data-testid="input-import-json"]')) {
+      const file = el.files?.[0];
+      el.value = '';
+      if (!file) return;
+      const feedback = root.querySelector('[data-testid="import-feedback"]');
+      if (file.size > 2 * 1024 * 1024) {
+        feedback.textContent = 'That file is too large. Choose a Studyline JSON export under 2 MB.';
+        feedback.hidden = false;
+        return;
+      }
+      void file.text().then((text) => {
+        const importedState = parseImportedState(JSON.parse(text));
+        pendingImportState = importedState;
+        if (feedback) feedback.hidden = true;
+        const trigger = root.querySelector('[data-testid="button-load-plan"]');
+        openConfirmation('import', trigger);
+      }).catch((error) => {
+        if (feedback) {
+          feedback.textContent = error instanceof SyntaxError
+            ? 'The selected file is not valid JSON. Choose a Studyline JSON export.'
+            : error instanceof Error ? error.message : 'The selected plan could not be imported.';
+          feedback.hidden = false;
+        }
+      });
+      return;
+    }
     if (el instanceof HTMLSelectElement && el.dataset.kind === 'course-grade') {
       const item = findCourse(el.dataset.semester, el.dataset.course);
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
@@ -646,7 +707,13 @@ export function mountSimulator(root) {
       return;
     }
     if (action === 'load-cs-sample') {
-      openConfirmation('sample', button);
+      root.querySelector('[data-testid="details-load-plan"]').open = false;
+      openConfirmation('sample', root.querySelector('[data-testid="button-load-plan"]'));
+      return;
+    }
+    if (action === 'select-import-json') {
+      root.querySelector('[data-testid="details-load-plan"]').open = false;
+      root.querySelector('[data-testid="input-import-json"]').click();
       return;
     }
     if (action === 'cancel-confirmation') {
@@ -655,14 +722,16 @@ export function mountSimulator(root) {
     }
     if (action === 'confirm-action') {
       const confirmedAction = pendingConfirmation;
+      const importedState = pendingImportState;
       dialog()?.close();
       if (confirmedAction === 'clear') state = emptyState();
       else if (confirmedAction === 'sample') state = sampleCsState();
+      else if (confirmedAction === 'import' && importedState) state = importedState;
       else return;
       collapsedSemesters.clear();
       paint();
       persist(true);
-      root.querySelector(`[data-action="${confirmedAction === 'sample' ? 'load-cs-sample' : 'clear-data'}"]`)?.focus();
+      root.querySelector('[data-testid="button-load-plan"]')?.focus();
       return;
     }
     if (action === 'add-semester') state.semesters.push(semester(`Semester ${state.semesters.length + 1}`));
