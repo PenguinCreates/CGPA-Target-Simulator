@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Studyline CGPA Mobile",
+    "slug": "cgpa-target-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "cgpa-target-mobile",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#edf4fa",
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png",
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
