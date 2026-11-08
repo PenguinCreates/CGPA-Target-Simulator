@@ -114,10 +114,10 @@ export function derive(state) {
 
 export function statusFor(data) {
   const { requiredFutureGpa, remainingCreditsAfterScenario, projectedQualityPoints, targetTotalQualityPoints } = data;
-  if (!data.targetValid) return { kind: 'warning', label: 'Target needed', copy: 'Enter a target from 0.00 to 4.00 to see your projection.' };
   if (!data.graduationCreditsValid) return { kind: 'warning', label: 'Graduation credits needed', copy: 'Enter the total credit hours required for your degree.' };
   if (data.remainingCreditsToGraduation < 0) return { kind: 'warning', label: 'Credits exceed degree total', copy: 'Your completed credits are higher than the graduation-credit setting. Check that total before using the projection.' };
-  if (data.remainingCreditsAfterScenario < 0) return { kind: 'warning', label: 'Scenario exceeds remaining credits', copy: 'These hypothetical courses exceed the credits still needed for graduation. Adjust the scenario or degree total.' };
+  if (data.scenarioExceedsRemainingCredits) return { kind: 'warning', label: 'Scenario exceeds remaining credits', copy: 'These hypothetical courses exceed the credits still needed for graduation. Adjust the scenario or degree total.' };
+  if (!data.targetValid) return { kind: 'warning', label: 'Target needed', copy: 'Enter a target from 0.00 to 4.00 to see your projection.' };
   if (requiredFutureGpa > 4) return { kind: 'unreachable', label: 'Mathematically Impossible', copy: 'This target would require more than a 4.0 average in the remaining graduation credits.' };
   if (requiredFutureGpa < 2) return { kind: 'success', label: 'Easily Achievable', copy: 'The remaining average needed is below 2.0. The what-if courses are included in this calculation.' };
   if (data.remainingCreditsAfterScenario === 0 && projectedQualityPoints >= targetTotalQualityPoints) return { kind: 'success', label: 'Goal met at graduation', copy: 'Your completed record and what-if courses meet the target quality points for the graduation-credit total.' };
@@ -270,6 +270,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
             <div><div class="eyebrow">What-if simulation</div><h2 class="panel-title" id="scenario-title">Try upcoming courses</h2><p class="panel-kicker">Add possible courses and grades to see their effect without changing your completed record.</p></div>
             <div class="scenario-score" aria-live="polite"><span>Predicted CGPA</span><strong data-testid="text-predicted-cgpa">${predictedGpa === null ? '—' : format(predictedGpa)}</strong><small data-testid="text-scenario-summary">${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points</small></div>
           </div>
+          <p class="scenario-credit-warning" data-testid="warning-scenario-credit-overage" role="alert" aria-live="polite" ${data.scenarioExceedsRemainingCredits ? '' : 'hidden'}>Planned courses exceed your remaining degree credits by <strong>${format(data.scenarioCreditOverage, 1)} cr</strong>. Reduce course credits or remove a what-if course.</p>
           <div class="course-table-head scenario-table-head" aria-hidden="true"><span>Hypothetical course</span><span style="text-align:right">Credits</span><span style="text-align:center">Projected grade</span><span></span></div>
           <div class="scenario-list" data-testid="list-scenario-courses">
             ${state.scenarioCourses.length ? state.scenarioCourses.map(scenarioCourseMarkup).join('') : '<p class="scenario-empty">No hypothetical courses yet. Add one to test how a future grade could change your predicted CGPA.</p>'}
@@ -327,6 +328,13 @@ function refreshOutputs(root, state, saved) {
   set('text-average-credits-per-term', `${format(data.averageCreditsPerRemainingSemester, 1)} cr`);
   set('text-predicted-cgpa', data.predictedCgpa === null ? '—' : format(data.predictedCgpa));
   set('text-scenario-summary', `${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points`);
+  const scenarioWarning = root.querySelector('[data-testid="warning-scenario-credit-overage"]');
+  if (scenarioWarning) {
+    scenarioWarning.hidden = !data.scenarioExceedsRemainingCredits;
+    scenarioWarning.innerHTML = data.scenarioExceedsRemainingCredits
+      ? `Planned courses exceed your remaining degree credits by <strong>${format(data.scenarioCreditOverage, 1)} cr</strong>. Reduce course credits or remove a what-if course.`
+      : '';
+  }
   set('text-credits-earned', `${format(data.totalCreditsEarned, 1)} credits`);
   set('text-quality-points', `${format(data.totalQualityPoints, 1)} points`);
   set('text-summary-cgpa', `${data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa)} out of 4.0`);

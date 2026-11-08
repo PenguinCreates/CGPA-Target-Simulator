@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/cgpa-target-mobile/"
+title = "Studyline CGPA Mobile"
+description = "A native iPhone and Android companion for the Studyline CGPA Target Simulator. Students can track completed coursework, adjust planned courses, see required graduation grades, and save plans on-device."
+version = "1.0.0"
+id = "artifacts/cgpa-target-mobile-app"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/cgpa-target-mobile/" ]
+localPort = 22926
+
+[services.development]
+run = "pnpm --filter @workspace/cgpa-target-mobile-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cgpa-target-mobile-app", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/cgpa-target-mobile-app", "run", "serve" ]
+
+[services.env]
+PORT = "22926"
+BASE_PATH = "/cgpa-target-mobile/"

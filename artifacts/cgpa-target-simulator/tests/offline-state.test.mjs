@@ -43,6 +43,8 @@ function assertProductsMatch(plan) {
     current: mobile.current,
     projected: mobile.projected,
     remaining: mobile.remaining,
+    scenarioExceedsRemainingCredits: mobile.scenarioExceedsRemainingCredits,
+    scenarioCreditOverage: mobile.scenarioCreditOverage,
     needed: mobile.needed,
   }, {
     credits: simulator.totalCreditsEarned,
@@ -52,6 +54,8 @@ function assertProductsMatch(plan) {
     current: simulator.currentCumulativeGpa,
     projected: simulator.predictedCgpa,
     remaining: simulator.remainingCreditsAfterScenario,
+    scenarioExceedsRemainingCredits: simulator.scenarioExceedsRemainingCredits,
+    scenarioCreditOverage: simulator.scenarioCreditOverage,
     needed: simulator.requiredFutureGpa,
   });
 }
@@ -168,6 +172,27 @@ test('mobile and simulator agree when scenario courses fill or exceed degree cre
   });
   assertProductsMatch(exceedsDegree);
   assert.equal(derive(exceedsDegree).requiredFutureGpa, 0);
+  assert.equal(derive(exceedsDegree).scenarioExceedsRemainingCredits, true);
+  assert.equal(derive(exceedsDegree).scenarioCreditOverage, 1);
+  assert.equal(statusFor(derive(exceedsDegree)).label, 'Scenario exceeds remaining credits');
+
+  exceedsDegree.scenarioCourses[0].creditHours = 3;
+  assert.equal(derive(exceedsDegree).scenarioExceedsRemainingCredits, false);
+  assert.equal(derive(exceedsDegree).scenarioCreditOverage, 0);
+  assert.notEqual(statusFor(derive(exceedsDegree)).label, 'Scenario exceeds remaining credits');
+});
+
+test('scenario overage remains visible when the target GPA is missing', () => {
+  const plan = sharedPlan({
+    completed: [{ id: 'completed', name: 'Completed', creditHours: 3, gradeEarned: 'B' }],
+    scenarios: [{ id: 'scenario', name: 'Scenario', creditHours: 4, gradeEarned: 'A' }],
+    targetCgpa: '',
+    graduationCredits: 6,
+  });
+  const metrics = derive(plan);
+  assert.equal(metrics.scenarioExceedsRemainingCredits, true);
+  assert.equal(statusFor(metrics).label, 'Scenario exceeds remaining credits');
+  assert.equal(calculateMobile(plan).status.label, 'Scenario exceeds remaining credits');
 });
 
 test('migrates the previous localStorage state into IndexedDB', async () => {

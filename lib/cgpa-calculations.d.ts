@@ -30,6 +30,8 @@ export type CgpaMetrics = {
   targetTotalQualityPoints: number;
   remainingCreditsToGraduation: number;
   remainingCreditsAfterScenario: number;
+  scenarioExceedsRemainingCredits: boolean;
+  scenarioCreditOverage: number;
   averageCreditsPerRemainingSemester: number | null;
   requiredFutureGpa: number | null;
   targetValid: boolean;

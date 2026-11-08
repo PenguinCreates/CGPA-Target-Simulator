@@ -92,6 +92,8 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .scenario-score span, .scenario-score small { display: block; color: hsl(var(--muted-foreground)); font-size: 10px; }
 .scenario-score strong { display: block; margin: 3px 0; color: hsl(var(--primary)); font: 500 27px var(--app-font-mono); }
 .scenario-score small { font-size: 9px; }
+.scenario-credit-warning { margin: -4px 0 14px; padding: 11px 13px; border: 1px solid hsl(var(--destructive) / .25); border-radius: 9px; color: hsl(var(--destructive)); background: hsl(var(--destructive) / .07); font-size: 11px; line-height: 1.5; }
+.scenario-credit-warning[hidden] { display: none; }
 .scenario-list { display: grid; gap: 0; }
 .scenario-table-head { border-bottom: 1px solid hsl(var(--border)); }
 .scenario-row:first-child { border-top: 0; }

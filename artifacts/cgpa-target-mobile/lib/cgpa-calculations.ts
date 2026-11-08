@@ -19,15 +19,13 @@ export const POINTS: Record<Grade, number> = { ...CGPA_GRADE_POINTS };
 export function calculate(plan: Plan) {
   const metrics = calculateCgpaMetrics(plan);
   const { requiredFutureGpa, remainingCreditsToGraduation, remainingCreditsAfterScenario } = metrics;
-  const status = !metrics.targetValid
-    ? { label: 'Target needed', tone: 'warning' as const }
-    : !metrics.graduationCreditsValid
+  const status = !metrics.graduationCreditsValid
       ? { label: 'Degree credits needed', tone: 'warning' as const }
       : remainingCreditsToGraduation < 0
         ? { label: 'Check degree credits', tone: 'warning' as const }
-        : remainingCreditsAfterScenario < 0
+        : metrics.scenarioExceedsRemainingCredits
           ? { label: 'Scenario exceeds remaining credits', tone: 'warning' as const }
-          : requiredFutureGpa === null
+          : !metrics.targetValid || requiredFutureGpa === null
             ? { label: 'Target needed', tone: 'warning' as const }
             : requiredFutureGpa > 4
               ? { label: 'Out of reach', tone: 'danger' as const }
@@ -47,6 +45,8 @@ export function calculate(plan: Plan) {
     current: metrics.currentCumulativeGpa,
     projected: metrics.predictedCgpa,
     remaining: metrics.remainingCreditsAfterScenario,
+    scenarioExceedsRemainingCredits: metrics.scenarioExceedsRemainingCredits,
+    scenarioCreditOverage: metrics.scenarioCreditOverage,
     needed: requiredFutureGpa,
     status,
   };
