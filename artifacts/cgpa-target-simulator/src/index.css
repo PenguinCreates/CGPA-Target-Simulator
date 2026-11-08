@@ -157,6 +157,8 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .semester-label { flex: 1; }
 .semester-name { max-width: 210px; }
 .semester-summary { margin-left: auto; font-variant-numeric: tabular-nums; }
+.semester-cumulative { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 8px 0 0 38px; padding-top: 8px; border-top: 1px solid hsl(var(--border) / .7); color: hsl(var(--muted-foreground)); font-size: 10px; }
+.semester-cumulative strong { color: hsl(var(--primary)); font: 600 12px var(--app-font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .semester-content[hidden] { display: none; }
 .semester-content { padding-top: 12px; }
 .course-table-head, .course-row { grid-template-columns: minmax(100px,1fr) 66px 80px 28px; gap: 7px; }
@@ -199,6 +201,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
   .semester-head { gap: 7px; }
   .semester-name { width: min(160px, 100%); }
   .semester-summary { font-size: 9px; }
+  .semester-cumulative { margin-left: 35px; font-size: 9px; }
   .course-table-head, .course-row { grid-template-columns: minmax(80px,1fr) 54px 68px 26px; gap: 4px; }
   .theme-toggle { padding: 7px 8px; }
   .top-meta { gap: 4px; }
@@ -209,6 +212,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
   .status-badge { padding: 4px 6px; font-size: 8px; }
   .semester-index { width: 24px; }
   .semester-name { width: 120px; }
+  .semester-cumulative { margin-left: 29px; }
   .chart-legend { font-size: 9px; gap: 4px; }
 }
 

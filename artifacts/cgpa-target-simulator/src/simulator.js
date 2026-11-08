@@ -112,19 +112,41 @@ export function derive(state) {
   return calculateCgpaMetrics(state);
 }
 
-export function summarizeSemester(term) {
-  const { credits, qualityPoints } = term.courses.reduce((totals, item) => {
+function semesterTotals(term) {
+  return term.courses.reduce((totals, item) => {
     const courseCredits = numeric(item.creditHours);
     totals.credits += courseCredits;
     totals.qualityPoints += courseCredits * (GRADE_POINTS[item.gradeEarned] ?? 0);
     return totals;
   }, { credits: 0, qualityPoints: 0 });
+}
+
+export function summarizeSemester(term) {
+  const { credits, qualityPoints } = semesterTotals(term);
   const gpa = credits ? qualityPoints / credits : 0;
   return {
     credits,
     gpa,
     label: `${format(credits, 1)} completed credits · ${format(gpa, 2)} GPA`,
   };
+}
+
+export function summarizeCumulativeSemesters(semesters) {
+  let credits = 0;
+  let qualityPoints = 0;
+  return semesters.map((term, index) => {
+    const totals = semesterTotals(term);
+    credits += totals.credits;
+    qualityPoints += totals.qualityPoints;
+    const cgpa = credits ? qualityPoints / credits : null;
+    const name = term.name || `Semester ${index + 1}`;
+    return {
+      id: term.id,
+      name,
+      cgpa,
+      label: `Cumulative CGPA after ${name}: ${cgpa === null ? 'No graded credits yet' : format(cgpa)}`,
+    };
+  });
 }
 
 export function statusFor(data) {
@@ -146,7 +168,7 @@ function gradeOptions(selected) {
   return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
 }
 
-function semesterMarkup(term, index, collapsedSemesters = new Set()) {
+function semesterMarkup(term, index, collapsedSemesters = new Set(), cumulativeSummary) {
   const courses = term.courses.map((c) => `
     <div class="course-row">
       <label class="sr-only" for="course-name-${c.id}">Course name</label>
@@ -169,6 +191,10 @@ function semesterMarkup(term, index, collapsedSemesters = new Set()) {
         <input id="semester-name-${term.id}" class="semester-name" data-kind="semester-name" data-semester="${escaped(term.id)}" data-testid="input-semester-name-${escaped(term.id)}" aria-label="Semester name" value="${escaped(term.name)}">
       </div>
       <span class="semester-summary" data-term-summary="${escaped(term.id)}" aria-label="${escaped(summary.label)}">${escaped(summary.label)}</span>
+    </div>
+    <div class="semester-cumulative" data-cumulative-summary="${escaped(term.id)}" role="status" aria-label="${escaped(cumulativeSummary.label)}">
+      <span data-cumulative-label>Cumulative CGPA after ${escaped(cumulativeSummary.name)}</span>
+      <strong data-cumulative-value>${cumulativeSummary.cgpa === null ? '—' : format(cumulativeSummary.cgpa)}</strong>
     </div>
     <div id="semester-content-${escaped(term.id)}" class="semester-content" ${collapsed ? 'hidden' : ''}>
       <div class="course-table-head" aria-hidden="true"><span>Course</span><span style="text-align:right">Credits</span><span style="text-align:center">Grade</span><span></span></div>
@@ -195,6 +221,7 @@ function scenarioCourseMarkup(c) {
 
 function render(root, state, saved = true, collapsedSemesters = new Set()) {
   const data = derive(state);
+  const cumulativeSummaries = summarizeCumulativeSemesters(state.semesters);
   const currentGpa = data.currentCumulativeGpa;
   const predictedGpa = data.predictedCgpa;
   const status = statusFor(data);
@@ -248,7 +275,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
               <span class="eyebrow" data-testid="text-semester-count">${state.semesters.length} ${state.semesters.length === 1 ? 'semester' : 'semesters'}</span>
             </div>
             <div class="semester-list" data-testid="list-semesters">
-              ${state.semesters.length ? state.semesters.map((term, index) => semesterMarkup(term, index, collapsedSemesters)).join('') : `<div class="semester-card"><p class="semester-empty">No semesters added. Start with your completed coursework to build an accurate projection.</p></div>`}
+              ${state.semesters.length ? state.semesters.map((term, index) => semesterMarkup(term, index, collapsedSemesters, cumulativeSummaries[index])).join('') : `<div class="semester-card"><p class="semester-empty">No semesters added. Start with your completed coursework to build an accurate projection.</p></div>`}
             </div>
             <div class="course-footer"><button type="button" class="button button-soft" data-action="add-semester" data-testid="button-add-semester">＋ Add semester</button><span class="hint">Only completed courses count toward your current CGPA.</span></div>
           </section>
@@ -358,6 +385,17 @@ function refreshOutputs(root, state, saved) {
     const summary = summarizeSemester(term);
     node.textContent = summary.label;
     node.setAttribute('aria-label', summary.label);
+  }
+  const cumulativeNodes = new Map([...root.querySelectorAll('[data-cumulative-summary]')]
+    .map((node) => [node.dataset.cumulativeSummary, node]));
+  for (const summary of summarizeCumulativeSemesters(state.semesters)) {
+    const node = cumulativeNodes.get(String(summary.id));
+    if (!node) continue;
+    node.setAttribute('aria-label', summary.label);
+    const label = node.querySelector('[data-cumulative-label]');
+    if (label) label.textContent = `Cumulative CGPA after ${summary.name}`;
+    const value = node.querySelector('[data-cumulative-value]');
+    if (value) value.textContent = summary.cgpa === null ? '—' : format(summary.cgpa);
   }
   const save = root.querySelector('[data-testid="status-save"] .save-copy');
   if (save) save.textContent = typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…';

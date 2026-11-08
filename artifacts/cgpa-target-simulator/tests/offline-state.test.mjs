@@ -12,7 +12,7 @@ globalThis.localStorage = (() => {
   };
 })();
 
-const { derive, parseImportedState, statusFor, summarizeSemester } = await import('../src/simulator.js');
+const { derive, parseImportedState, statusFor, summarizeCumulativeSemesters, summarizeSemester } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
 const { calculate: calculateMobile } = await import('../../cgpa-target-mobile/lib/cgpa-calculations.ts');
 
@@ -107,6 +107,50 @@ test('semester credit totals and GPA follow course credit and contents changes',
     gpa: 4,
     label: '4.0 completed credits · 4.00 GPA',
   });
+});
+
+test('cumulative CGPA follows semester order, names, courses, grades, and credits', () => {
+  const semesters = [
+    {
+      id: 'term-1',
+      name: 'Fall 2025',
+      courses: [{ id: 'a', name: 'A course', creditHours: 3, gradeEarned: 'A' }],
+    },
+    {
+      id: 'term-2',
+      name: 'Spring 2026',
+      courses: [{ id: 'b', name: 'B course', creditHours: 2, gradeEarned: 'B' }],
+    },
+  ];
+
+  assert.deepEqual(summarizeCumulativeSemesters(semesters).map(({ name, cgpa, label }) => ({ name, cgpa, label })), [
+    { name: 'Fall 2025', cgpa: 4, label: 'Cumulative CGPA after Fall 2025: 4.00' },
+    { name: 'Spring 2026', cgpa: 3.6, label: 'Cumulative CGPA after Spring 2026: 3.60' },
+  ]);
+
+  semesters[1].name = 'Spring term';
+  semesters[1].courses.push({ id: 'f', name: 'New course', creditHours: 1, gradeEarned: 'F' });
+  assert.equal(summarizeCumulativeSemesters(semesters)[1].label, 'Cumulative CGPA after Spring term: 3.00');
+
+  semesters[1].courses[1].gradeEarned = 'A';
+  assert.equal(summarizeCumulativeSemesters(semesters)[1].cgpa, 22 / 6);
+
+  semesters[1].courses[1].creditHours = 2;
+  assert.equal(summarizeCumulativeSemesters(semesters)[1].cgpa, 26 / 7);
+
+  semesters[1].courses.pop();
+  assert.equal(summarizeCumulativeSemesters(semesters)[1].cgpa, 3.6);
+});
+
+test('cumulative CGPA stays unavailable until a semester has graded credits', () => {
+  const summaries = summarizeCumulativeSemesters([
+    { id: 'empty', name: 'First term', courses: [{ id: 'zero', creditHours: 0, gradeEarned: 'A' }] },
+    { id: 'graded', name: 'Second term', courses: [{ id: 'a', creditHours: 3, gradeEarned: 'B+' }] },
+  ]);
+
+  assert.equal(summaries[0].cgpa, null);
+  assert.match(summaries[0].label, /No graded credits yet/);
+  assert.equal(summaries[1].cgpa, 3.5);
 });
 
 test('flags targets that require more than a 4.0 average', () => {
