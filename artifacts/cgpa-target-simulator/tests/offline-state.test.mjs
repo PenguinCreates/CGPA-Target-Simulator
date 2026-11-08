@@ -12,7 +12,7 @@ globalThis.localStorage = (() => {
   };
 })();
 
-const { derive, statusFor, printSummaryMarkup } = await import('../src/simulator.js');
+const { derive, statusFor } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
 
 test('calculates weighted CGPA and future GPA from course credits', () => {
@@ -44,22 +44,6 @@ test('flags targets that require more than a 4.0 average', () => {
   });
   assert.equal(metrics.requiredFutureGpa, 4.25);
   assert.equal(statusFor(metrics).kind, 'unreachable');
-});
-
-test('print summary reflects the current plan without editing controls', () => {
-  const summary = printSummaryMarkup({
-    semesters: [{ id: 's1', name: 'Updated <term>', courses: [
-      { id: 'a', name: 'A course', creditHours: 3, gradeEarned: 'A' },
-    ] }],
-    scenarioCourses: [],
-    target: { targetCgpa: 3.5, graduationCredits: 6, remainingSemesters: 1 },
-  });
-  assert.match(summary, /Current CGPA<\/dt><dd>4\.00/);
-  assert.match(summary, /Target CGPA<\/dt><dd>3\.50/);
-  assert.match(summary, /Required remaining GPA<\/dt><dd>3\.00/);
-  assert.match(summary, /Updated &lt;term&gt;/);
-  assert.match(summary, /<td>4\.00<\/td>/);
-  assert.doesNotMatch(summary, /<(?:input|select|button)\b/i);
 });
 
 test('migrates the previous localStorage state into IndexedDB', async () => {

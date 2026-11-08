@@ -150,68 +150,6 @@ export function statusFor(data) {
 
 const formatRequired = (value) => value === Infinity ? '∞' : value === null ? '—' : format(value);
 
-function semesterMetrics(term) {
-  const credits = term.courses.reduce((sum, item) => sum + numeric(item.creditHours), 0);
-  const qualityPoints = term.courses.reduce((sum, item) => sum + numeric(item.creditHours) * (GRADE_POINTS[item.gradeEarned] ?? 0), 0);
-  return { credits, qualityPoints, gpa: credits > 0 ? qualityPoints / credits : null };
-}
-
-function semesterGpaRowsMarkup(state) {
-  const target = numeric(state.target.targetCgpa, 0, 4);
-  return state.semesters.map((term, index) => {
-    const name = term.name || `Semester ${index + 1}`;
-    const { gpa } = semesterMetrics(term);
-    return `<tr data-semester-gpa-row="${escaped(term.id)}">
-      <th scope="row">${escaped(name)}</th>
-      <td data-column="semester-gpa">${gpa === null ? 'No GPA' : format(gpa)}</td>
-      <td data-column="target-gpa">${format(target)}</td>
-    </tr>`;
-  }).join('');
-}
-
-export function printSummaryMarkup(state) {
-  const data = derive(state);
-  const status = statusFor(data);
-  const currentGpa = data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa);
-  const targetGpa = data.targetValid ? format(data.goal) : '—';
-  const graduationCredits = data.graduationCreditsValid ? format(data.graduationCredits, 1) : '—';
-  const semesters = state.semesters.length
-    ? state.semesters.map((term, index) => {
-      const { credits, gpa } = semesterMetrics(term);
-      return `<tr>
-        <th scope="row">${escaped(term.name || `Semester ${index + 1}`)}</th>
-        <td>${gpa === null ? 'No GPA' : format(gpa)}</td>
-        <td>${format(credits, 1)} cr</td>
-      </tr>`;
-    }).join('')
-    : '<tr><td colspan="3">No completed semesters recorded.</td></tr>';
-  const scenario = state.scenarioCourses.length
-    ? `<p class="print-scenario">What-if courses included: ${format(data.scenarioCredits, 1)} credits · Predicted CGPA ${data.predictedCgpa === null ? '—' : format(data.predictedCgpa)}</p>`
-    : '';
-
-  return `<section class="print-only-summary" aria-labelledby="print-summary-title">
-    <header class="print-summary-header">
-      <div><p class="print-eyebrow">STUDYLINE · ACADEMIC PLANNER</p><h1 id="print-summary-title">CGPA progress summary</h1></div>
-      <p>Personal study plan</p>
-    </header>
-    <dl class="print-metrics">
-      <div><dt>Current CGPA</dt><dd>${currentGpa}<small> / 4.0</small></dd></div>
-      <div><dt>Target CGPA</dt><dd>${targetGpa}<small> / 4.0</small></dd></div>
-      <div><dt>Required remaining GPA</dt><dd>${formatRequired(data.requiredFutureGpa)}<small> / 4.0</small></dd></div>
-      <div><dt>Credits completed</dt><dd>${format(data.totalCreditsEarned, 1)}<small> credits</small></dd></div>
-      <div><dt>Degree credit total</dt><dd>${graduationCredits}<small> credits</small></dd></div>
-    </dl>
-    <p class="print-status"><strong>${escaped(status.label)}:</strong> ${escaped(status.copy)}</p>
-    ${scenario}
-    <h2>Semester GPA results</h2>
-    <table class="print-semester-table">
-      <thead><tr><th scope="col">Semester</th><th scope="col">Semester GPA</th><th scope="col">Credits</th></tr></thead>
-      <tbody>${semesters}</tbody>
-    </table>
-    <p class="print-disclaimer">Projection is an estimate based on the grades and degree assumptions entered in this plan.</p>
-  </section>`;
-}
-
 function gradeOptions(selected) {
   return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
 }
@@ -227,7 +165,8 @@ function semesterMarkup(term, index, collapsedSemesters = new Set()) {
       <select id="course-grade-${c.id}" class="field grade" data-kind="course-grade" data-semester="${escaped(term.id)}" data-course="${escaped(c.id)}" data-testid="select-course-grade-${escaped(c.id)}" aria-label="Grade earned">${gradeOptions(c.gradeEarned)}</select>
       <button type="button" class="button-icon" data-action="remove-course" data-semester="${escaped(term.id)}" data-course="${escaped(c.id)}" data-testid="button-remove-course-${escaped(c.id)}" aria-label="Remove ${escaped(c.name || 'course')}">×</button>
     </div>`).join('');
-  const { credits, gpa } = semesterMetrics(term);
+  const credits = term.courses.reduce((sum, c) => sum + numeric(c.creditHours), 0);
+  const qps = term.courses.reduce((sum, c) => sum + numeric(c.creditHours) * (GRADE_POINTS[c.gradeEarned] ?? 0), 0);
   const collapsed = collapsedSemesters.has(term.id);
   return `<article class="semester-card" data-semester-card="${escaped(term.id)}">
     <div class="semester-head">
@@ -238,7 +177,7 @@ function semesterMarkup(term, index, collapsedSemesters = new Set()) {
         <label class="sr-only" for="semester-name-${term.id}">Semester name</label>
         <input id="semester-name-${term.id}" class="semester-name" data-kind="semester-name" data-semester="${escaped(term.id)}" data-testid="input-semester-name-${escaped(term.id)}" aria-label="Semester name" value="${escaped(term.name)}">
       </div>
-      <span class="semester-summary" data-term-summary="${escaped(term.id)}">${format(credits, 1)} cr · ${gpa === null ? '—' : format(gpa)} GPA</span>
+      <span class="semester-summary" data-term-summary="${escaped(term.id)}">${format(credits, 1)} cr · ${format(credits ? qps / credits : 0, 2)} GPA</span>
     </div>
     <div id="semester-content-${escaped(term.id)}" class="semester-content" ${collapsed ? 'hidden' : ''}>
       <div class="course-table-head" aria-hidden="true"><span>Course</span><span style="text-align:right">Credits</span><span style="text-align:center">Grade</span><span></span></div>
@@ -286,7 +225,6 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
           </div>
           <div class="academic-note"><span class="academic-note-mark" aria-hidden="true">↗</span><span><strong>Plan with confidence</strong><small>Every grade updates your outlook instantly.</small></span></div>
         </section>
-        ${printSummaryMarkup(state)}
         <nav class="action-toolbar" aria-label="Plan actions">
           <button type="button" class="button button-soft" data-action="export-json" data-testid="button-export-json"><span aria-hidden="true">↓</span> Export JSON</button>
           <button type="button" class="button button-soft" data-action="print-summary" data-testid="button-print-summary"><span aria-hidden="true">▤</span> Print summary</button>
@@ -340,14 +278,6 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
         <section class="panel chart-panel" aria-labelledby="trajectory-title">
           <div class="panel-heading"><div><div class="eyebrow">Your progress</div><h2 class="panel-title" id="trajectory-title">Semester GPA trajectory</h2><p class="panel-kicker">Compare each completed semester with your target.</p></div><span class="chart-legend"><i></i> Semester GPA <i class="legend-target"></i> Target</span></div>
           <div class="chart-wrap"><canvas id="trajectory-chart" role="img" aria-label="Line chart showing semester GPA and target GPA"></canvas><p class="chart-fallback" hidden>Chart is unavailable. Your semester grades are still included in the calculation.</p></div>
-          <div class="chart-text-summary">
-            <h3 class="breakdown-title">Semester GPA values</h3>
-            <table class="chart-summary-table" data-testid="table-semester-gpa">
-              <caption class="sr-only">Semester GPA compared with target CGPA</caption>
-              <thead><tr><th scope="col">Semester</th><th scope="col">Semester GPA</th><th scope="col">Target GPA</th></tr></thead>
-              <tbody>${semesterGpaRowsMarkup(state)}</tbody>
-            </table>
-          </div>
         </section>
         <section class="panel scenario-panel" aria-labelledby="scenario-title">
           <div class="scenario-header">
@@ -378,8 +308,6 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
 
 function refreshOutputs(root, state, saved) {
   const data = derive(state), status = statusFor(data), required = data.requiredFutureGpa;
-  const printSummary = root.querySelector('.print-only-summary');
-  if (printSummary) printSummary.outerHTML = printSummaryMarkup(state);
   const set = (testid, value) => root.querySelectorAll(`[data-testid="${testid}"]`).forEach((node) => { node.textContent = value; });
   set('text-required-gpa', formatRequired(required));
   set('text-required-gpa-detail', formatRequired(required));
@@ -411,11 +339,10 @@ function refreshOutputs(root, state, saved) {
   for (const term of state.semesters) {
     const node = root.querySelector(`[data-term-summary="${term.id}"]`);
     if (!node) continue;
-    const { credits, gpa } = semesterMetrics(term);
-    node.textContent = `${format(credits, 1)} cr · ${gpa === null ? '—' : format(gpa)} GPA`;
+    const credits = term.courses.reduce((sum, c) => sum + numeric(c.creditHours), 0);
+    const points = term.courses.reduce((sum, c) => sum + numeric(c.creditHours) * (GRADE_POINTS[c.gradeEarned] ?? 0), 0);
+    node.textContent = `${format(credits, 1)} cr · ${format(credits ? points / credits : 0, 2)} GPA`;
   }
-  const semesterGpaRows = root.querySelector('[data-testid="table-semester-gpa"] tbody');
-  if (semesterGpaRows) semesterGpaRows.innerHTML = semesterGpaRowsMarkup(state);
   const save = root.querySelector('[data-testid="status-save"] .save-copy');
   if (save) save.textContent = typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…';
 }
@@ -451,8 +378,9 @@ export function mountSimulator(root) {
     canvas.hidden = false;
     const labels = state.semesters.map((term, index) => term.name || `Semester ${index + 1}`);
     const values = state.semesters.map((term) => {
-      const { gpa } = semesterMetrics(term);
-      return gpa === null ? null : Number(gpa.toFixed(3));
+      const credits = term.courses.reduce((sum, item) => sum + numeric(item.creditHours), 0);
+      const points = term.courses.reduce((sum, item) => sum + numeric(item.creditHours) * (GRADE_POINTS[item.gradeEarned] ?? 0), 0);
+      return credits ? Number((points / credits).toFixed(3)) : null;
     });
     const target = numeric(state.target.targetCgpa, 0, 4);
     const computed = getComputedStyle(document.documentElement);
@@ -592,14 +520,14 @@ export function mountSimulator(root) {
     state = saved.state;
     const theme = await readThemePreference();
     if (destroyed) return;
-    ready = true;
-    root.inert = false;
-    root.setAttribute('aria-busy', 'false');
-    paint(saved.source === 'indexeddb');
     if (theme) {
       setTheme(theme === 'dark');
       void saveThemePreference(theme);
     }
+    ready = true;
+    root.inert = false;
+    root.setAttribute('aria-busy', 'false');
+    paint(saved.source === 'indexeddb');
     if (saved.source !== 'indexeddb') await persist(true);
   })();
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
@@ -714,7 +642,6 @@ export function mountSimulator(root) {
       return;
     }
     if (action === 'print-summary') {
-      refreshOutputs(root, state, false);
       window.print();
       return;
     }
