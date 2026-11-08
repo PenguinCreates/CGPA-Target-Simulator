@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
+import { File as ExpoFile } from 'expo-file-system';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -79,6 +81,91 @@ function safePlan(value: unknown): Plan {
   };
 }
 
+const MAX_BACKUP_SIZE = 1024 * 1024;
+
+function parsePlanBackup(raw: string): Plan {
+  if (raw.length > MAX_BACKUP_SIZE) {
+    throw new Error('Backup is too large. Choose a JSON file under 1 MB.');
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error("This isn't valid JSON. Select or paste a Studyline backup.");
+  }
+
+  const fail = (detail: string): never => {
+    throw new Error(`This JSON isn't a valid Studyline backup: ${detail}`);
+  };
+  const isRecord = (item: unknown): item is Record<string, unknown> =>
+    typeof item === 'object' && item !== null && !Array.isArray(item);
+  if (!isRecord(value) || !Array.isArray(value.semesters) || !Array.isArray(value.scenarioCourses) || !isRecord(value.target)) {
+    return fail('required plan sections are missing.');
+  }
+
+  const usedIds = new Set<string>();
+  const readId = (item: Record<string, unknown>, field: string): string => {
+    const id = item[field];
+    if (typeof id !== 'string' || !id.trim() || id.length > 120 || usedIds.has(id)) {
+      return fail('an item has a missing or duplicate ID.');
+    }
+    usedIds.add(id);
+    return id;
+  };
+  const readName = (item: Record<string, unknown>, field: string, label: string): string => {
+    const name = item[field];
+    if (typeof name !== 'string' || name.length > 200) return fail(`${label} names must be text up to 200 characters.`);
+    return name;
+  };
+  const readNumber = (item: Record<string, unknown>, field: string, label: string, max: number): number | '' => {
+    const number = item[field];
+    if (number === '') return '';
+    if (typeof number !== 'number' || !Number.isFinite(number) || number < 0 || number > max) {
+      return fail(`${label} must be between 0 and ${max}.`);
+    }
+    return number;
+  };
+  const readCourse = (item: unknown): Course => {
+    if (!isRecord(item)) return fail('a course entry is invalid.');
+    const grade = item.gradeEarned;
+    if (typeof grade !== 'string' || !GRADES.includes(grade as Grade)) {
+      return fail('a course has an unsupported grade.');
+    }
+    return {
+      id: readId(item, 'id'),
+      name: readName(item, 'name', 'Course'),
+      creditHours: readNumber(item, 'creditHours', 'Course credits', 1000),
+      gradeEarned: grade as Grade,
+    };
+  };
+  const readCourses = (items: unknown[]): Course[] => {
+    if (items.length > 2000) return fail('the backup contains too many courses.');
+    return items.map(readCourse);
+  };
+  if (value.semesters.length > 100) return fail('the backup contains too many semesters.');
+
+  const semesters: Semester[] = value.semesters.map((item) => {
+    if (!isRecord(item) || !Array.isArray(item.courses)) return fail('a semester entry is invalid.');
+    return {
+      id: readId(item, 'id'),
+      name: readName(item, 'name', 'Semester'),
+      courses: readCourses(item.courses),
+    };
+  });
+
+  const target = value.target;
+  const targetCgpa = readNumber(target, 'targetCgpa', 'Target CGPA', 4);
+  const graduationCredits = readNumber(target, 'graduationCredits', 'Degree credits', 1000);
+  const remainingSemesters = readNumber(target, 'remainingSemesters', 'Semesters left', 20);
+
+  return {
+    semesters,
+    scenarioCourses: readCourses(value.scenarioCourses),
+    target: { targetCgpa, graduationCredits, remainingSemesters },
+  };
+}
+
 function calculate(plan: Plan) {
   const completed = plan.semesters.flatMap((term) => term.courses);
   const credits = completed.reduce((sum, c) => sum + (Number(c.creditHours) || 0), 0);
@@ -115,6 +202,12 @@ export default function SimulatorScreen() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [issue, setIssue] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [backupText, setBackupText] = useState('');
+  const [backupSourceName, setBackupSourceName] = useState('');
+  const [backupPreview, setBackupPreview] = useState<Plan | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
   const metrics = useMemo(() => calculate(plan), [plan]);
 
   useEffect(() => {
@@ -223,6 +316,66 @@ export default function SimulatorScreen() {
     await Share.share({ title: 'Studyline CGPA plan', message: JSON.stringify(plan, null, 2) });
   };
 
+  const previewBackup = (raw: string) => {
+    setImportError(null);
+    try {
+      setBackupPreview(parsePlanBackup(raw));
+    } catch (error) {
+      setBackupPreview(null);
+      setImportError(error instanceof Error ? error.message : 'The backup could not be read.');
+    }
+  };
+
+  const openImport = () => {
+    setBackupText('');
+    setBackupSourceName('');
+    setBackupPreview(null);
+    setImportError(null);
+    setImportOpen(true);
+  };
+
+  const chooseBackupFile = async () => {
+    setImportBusy(true);
+    setImportError(null);
+    setBackupPreview(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset) throw new Error('No file was selected.');
+      if (typeof asset.size === 'number' && asset.size > MAX_BACKUP_SIZE) {
+        throw new Error('Backup is too large. Choose a JSON file under 1 MB.');
+      }
+      const raw = asset.file ? await asset.file.text() : await new ExpoFile(asset.uri).text();
+      setBackupText('');
+      setBackupSourceName(asset.name);
+      previewBackup(raw);
+    } catch (error) {
+      setBackupSourceName('');
+      setBackupPreview(null);
+      setImportError(error instanceof Error ? error.message : 'The selected file could not be read.');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const confirmImport = () => {
+    if (!backupPreview) return;
+    const restoredPlan = backupPreview;
+    Alert.alert('Replace this plan?', 'This will replace the plan currently saved on this device with the backup you previewed.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Replace plan',
+        style: 'destructive',
+        onPress: () => {
+          setPlan(restoredPlan);
+          setIssue(null);
+          setImportOpen(false);
+        },
+      },
+    ]);
+  };
+
   const toggleTheme = () => {
     const next = scheme === 'dark' ? 'light' : 'dark';
     Appearance.setColorScheme(next);
@@ -274,9 +427,14 @@ export default function SimulatorScreen() {
         <Card colors={colors}>
           <View style={styles.sectionHeader}>
             <View><Text style={[styles.eyebrow, { color: colors.primary }]}>GRADUATION PLAN</Text><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your target</Text></View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Share plan backup" testID="button-export-plan" onPress={exportPlan} style={styles.iconButton}>
-              <Feather name="share" size={19} color={colors.primary} />
-            </Pressable>
+            <View style={styles.backupActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Import plan backup" testID="button-import-plan" onPress={openImport} style={styles.iconButton}>
+                <Feather name="download" size={19} color={colors.primary} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Share plan backup" testID="button-export-plan" onPress={exportPlan} style={styles.iconButton}>
+                <Feather name="share" size={19} color={colors.primary} />
+              </Pressable>
+            </View>
           </View>
           <View style={styles.inputGrid}>
             <NumberField label="Target CGPA" value={plan.target.targetCgpa} suffix="/ 4.0" onChangeText={(v) => updateTarget('targetCgpa', v)} colors={colors} />
@@ -360,6 +518,62 @@ export default function SimulatorScreen() {
         <Text style={[styles.privacyNote, { color: colors.mutedForeground }]}>Your plan stays on this device. Grade scale: A 4.0 · B+ 3.5 · B 3.0 · C+ 2.5 · C 2.0 · D+ 1.5 · D 1.0 · F 0.0</Text>
         {issue ? <Text accessibilityRole="alert" style={[styles.issue, { color: colors.destructive }]}>{issue}</Text> : null}
       </KeyboardAwareScrollViewCompat>
+
+      <Modal transparent animationType="slide" visible={importOpen} onRequestClose={() => setImportOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <KeyboardAwareScrollViewCompat style={{ maxHeight: '90%' }} contentContainerStyle={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]} bottomOffset={24}>
+            <View style={styles.modalHeader}>
+              <View><Text style={[styles.eyebrow, { color: colors.primary }]}>MOVE YOUR PLAN</Text><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Import backup</Text></View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close import" testID="button-close-import" onPress={() => setImportOpen(false)} style={styles.iconButton}><Feather name="x" size={20} color={colors.mutedForeground} /></Pressable>
+            </View>
+            <Text style={[styles.helper, { color: colors.mutedForeground }]}>Choose a JSON backup file, or paste the backup text below. Your current plan stays unchanged until you confirm replacement.</Text>
+            <Pressable accessibilityRole="button" testID="button-choose-backup-file" disabled={importBusy} onPress={chooseBackupFile} style={[styles.fileButton, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+              <Feather name={importBusy ? 'loader' : 'folder'} size={17} color={colors.primary} />
+              <Text style={[styles.fileButtonText, { color: colors.primary }]}>{importBusy ? 'Reading backup…' : 'Choose JSON backup'}</Text>
+            </Pressable>
+            {backupSourceName ? <Text style={[styles.sourceName, { color: colors.mutedForeground }]}>Selected: {backupSourceName}</Text> : null}
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Or paste backup JSON</Text>
+            <TextInput
+              accessibilityLabel="Paste backup JSON"
+              testID="input-backup-json"
+              value={backupText}
+              onChangeText={(text) => {
+                setBackupText(text);
+                setBackupSourceName('');
+                setBackupPreview(null);
+                setImportError(null);
+              }}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder='{"semesters":[],"scenarioCourses":[],"target":{...}}'
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.backupInput, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+            />
+            {backupText.length > 0 ? (
+              <Pressable accessibilityRole="button" testID="button-preview-backup" onPress={() => previewBackup(backupText)} style={[styles.secondaryButton, { borderColor: colors.border, alignSelf: 'flex-start' }]}>
+                <Feather name="eye" size={15} color={colors.primary} /><Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Preview backup</Text>
+              </Pressable>
+            ) : null}
+            {importError ? <Text accessibilityRole="alert" testID="text-import-error" style={[styles.issue, { color: colors.destructive }]}>{importError}</Text> : null}
+            {backupPreview ? (
+              <View testID="backup-preview" style={[styles.backupPreview, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Text style={[styles.previewTitle, { color: colors.foreground }]}>Backup preview</Text>
+                <Text style={[styles.helper, { color: colors.mutedForeground }]}>
+                  {backupPreview.semesters.length} {backupPreview.semesters.length === 1 ? 'semester' : 'semesters'} · {backupPreview.semesters.reduce((sum, term) => sum + term.courses.length, 0)} completed courses · {backupPreview.scenarioCourses.length} planned courses
+                </Text>
+                <Text style={[styles.helper, { color: colors.mutedForeground }]}>Target CGPA: {backupPreview.target.targetCgpa === '' ? 'Not set' : Number(backupPreview.target.targetCgpa).toFixed(2)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.modalActions}>
+              <Pressable accessibilityRole="button" onPress={() => setImportOpen(false)} style={[styles.secondaryButton, { borderColor: colors.border }]}><Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Cancel</Text></Pressable>
+              <Pressable accessibilityRole="button" testID="button-confirm-import" disabled={!backupPreview || importBusy} onPress={confirmImport} style={[styles.saveButton, { backgroundColor: backupPreview ? colors.destructive : colors.muted, opacity: backupPreview ? 1 : 0.55 }]}>
+                <Text style={[styles.saveButtonText, { color: colors.destructiveForeground }]}>Replace current plan</Text>
+              </Pressable>
+            </View>
+          </KeyboardAwareScrollViewCompat>
+        </View>
+      </Modal>
 
       <Modal transparent animationType="slide" visible={!!editor} onRequestClose={() => setEditor(null)}>
         <View style={styles.modalBackdrop}>
@@ -454,6 +668,7 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: 'Inter_600SemiBold', fontSize: 10 },
   card: { borderWidth: 1, borderRadius: 17, padding: 16, gap: 13 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  backupActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   sectionTitle: { fontFamily: 'serif', fontSize: 25, marginTop: 3 },
   iconButton: { minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
   inputGrid: { gap: 10 },
@@ -499,6 +714,12 @@ const styles = StyleSheet.create({
   modalCard: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, padding: 20, paddingBottom: 32, gap: 10 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   textInput: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  fileButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  fileButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  sourceName: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: -4 },
+  backupInput: { minHeight: 112, maxHeight: 180, borderWidth: 1, borderRadius: 10, padding: 12, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, textAlignVertical: 'top' },
+  backupPreview: { borderWidth: 1, borderRadius: 12, padding: 13, gap: 5 },
+  previewTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   gradeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   gradeChoice: { width: '23%', minHeight: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
   gradeChoiceText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
