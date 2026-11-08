@@ -1,3 +1,5 @@
+import type { CgpaMetrics } from '../../../lib/cgpa-calculations.js';
+
 export type Grade = 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D+' | 'D' | 'F';
 
 export type Course = {
@@ -23,26 +25,7 @@ export type SimulatorState = {
   };
 };
 
-export type SimulatorMetrics = {
-  totalCreditsEarned: number;
-  totalQualityPoints: number;
-  currentCumulativeGpa: number | null;
-  scenarioCredits: number;
-  scenarioQualityPoints: number;
-  projectedCredits: number;
-  projectedQualityPoints: number;
-  predictedCgpa: number | null;
-  goal: number;
-  graduationCredits: number;
-  remainingSemesters: number;
-  targetTotalQualityPoints: number;
-  remainingCreditsToGraduation: number;
-  remainingCreditsAfterScenario: number;
-  averageCreditsPerRemainingSemester: number | null;
-  requiredFutureGpa: number | null;
-  targetValid: boolean;
-  graduationCreditsValid: boolean;
-};
+export type SimulatorMetrics = CgpaMetrics;
 
 export function sampleState(): SimulatorState;
 export function derive(state: SimulatorState): SimulatorMetrics;

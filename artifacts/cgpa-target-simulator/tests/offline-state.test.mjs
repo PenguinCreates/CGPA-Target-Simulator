@@ -14,6 +14,47 @@ globalThis.localStorage = (() => {
 
 const { derive, statusFor } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
+const { calculate: calculateMobile } = await import('../../cgpa-target-mobile/lib/cgpa-calculations.ts');
+
+function sharedPlan({
+  completed = [],
+  scenarios = [],
+  targetCgpa = 3.6,
+  graduationCredits = 120,
+  remainingSemesters = 4,
+} = {}) {
+  const semesters = [{ id: 'term-1', name: 'Semester 1', courses: completed }];
+  const scenarioCourses = scenarios;
+  return {
+    semesters,
+    scenarioCourses,
+    target: { targetCgpa, graduationCredits, remainingSemesters },
+  };
+}
+
+function assertProductsMatch(plan) {
+  const simulator = derive(plan);
+  const mobile = calculateMobile(plan);
+  assert.deepEqual({
+    credits: mobile.credits,
+    quality: mobile.quality,
+    scenarioCredits: mobile.scenarioCredits,
+    scenarioQuality: mobile.scenarioQuality,
+    current: mobile.current,
+    projected: mobile.projected,
+    remaining: mobile.remaining,
+    needed: mobile.needed,
+  }, {
+    credits: simulator.totalCreditsEarned,
+    quality: simulator.totalQualityPoints,
+    scenarioCredits: simulator.scenarioCredits,
+    scenarioQuality: simulator.scenarioQualityPoints,
+    current: simulator.currentCumulativeGpa,
+    projected: simulator.predictedCgpa,
+    remaining: simulator.remainingCreditsAfterScenario,
+    needed: simulator.requiredFutureGpa,
+  });
+}
 
 test('calculates weighted CGPA and future GPA from course credits', () => {
   const state = {
@@ -44,6 +85,73 @@ test('flags targets that require more than a 4.0 average', () => {
   });
   assert.equal(metrics.requiredFutureGpa, 4.25);
   assert.equal(statusFor(metrics).kind, 'unreachable');
+});
+
+test('mobile and simulator use the same credit weighting across every supported grade', () => {
+  const grades = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'];
+  const completed = grades.map((gradeEarned, index) => ({
+    id: `grade-${gradeEarned}`,
+    name: gradeEarned,
+    creditHours: index + 0.5,
+    gradeEarned,
+  }));
+  const plan = sharedPlan({ completed, targetCgpa: 3.25, graduationCredits: 50 });
+  assertProductsMatch(plan);
+  assert.equal(derive(plan).totalQualityPoints, completed.reduce(
+    (sum, course) => sum + course.creditHours * ({ A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 })[course.gradeEarned],
+    0,
+  ));
+});
+
+test('mobile and simulator agree at degree-credit boundaries and with invalid degree totals', () => {
+  const alreadyAtDegree = sharedPlan({
+    completed: [{ id: 'at-degree', name: 'Completed', creditHours: 120, gradeEarned: 'A' }],
+    targetCgpa: 4,
+    graduationCredits: 120,
+  });
+  assertProductsMatch(alreadyAtDegree);
+  assert.equal(derive(alreadyAtDegree).requiredFutureGpa, 0);
+
+  const missedAtDegree = sharedPlan({
+    completed: [{ id: 'at-degree-below-target', name: 'Completed', creditHours: 120, gradeEarned: 'B' }],
+    targetCgpa: 4,
+    graduationCredits: 120,
+  });
+  assertProductsMatch(missedAtDegree);
+  assert.equal(derive(missedAtDegree).requiredFutureGpa, Infinity);
+
+  const zeroDegree = sharedPlan({ targetCgpa: 4, graduationCredits: 0 });
+  assertProductsMatch(zeroDegree);
+  assert.equal(derive(zeroDegree).requiredFutureGpa, null);
+});
+
+test('mobile and simulator leave GPA undefined when all course credits are zero', () => {
+  const noCredits = sharedPlan({
+    completed: [{ id: 'zero-credit', name: 'Uncredited course', creditHours: 0, gradeEarned: 'A' }],
+  });
+  assertProductsMatch(noCredits);
+  assert.equal(derive(noCredits).currentCumulativeGpa, null);
+  assert.equal(derive(noCredits).predictedCgpa, null);
+});
+
+test('mobile and simulator agree when scenario courses fill or exceed degree credits', () => {
+  const fillsDegree = sharedPlan({
+    completed: [{ id: 'completed', name: 'Completed', creditHours: 3, gradeEarned: 'B' }],
+    scenarios: [{ id: 'scenario', name: 'Scenario', creditHours: 3, gradeEarned: 'A' }],
+    targetCgpa: 3.5,
+    graduationCredits: 6,
+  });
+  assertProductsMatch(fillsDegree);
+  assert.equal(derive(fillsDegree).predictedCgpa, 3.5);
+  assert.equal(derive(fillsDegree).requiredFutureGpa, 0);
+
+  const exceedsDegree = sharedPlan({
+    completed: [{ id: 'completed', name: 'Completed', creditHours: 3, gradeEarned: 'B' }],
+    scenarios: [{ id: 'scenario', name: 'Scenario', creditHours: 4, gradeEarned: 'A' }],
+    graduationCredits: 6,
+  });
+  assertProductsMatch(exceedsDegree);
+  assert.equal(derive(exceedsDegree).requiredFutureGpa, 0);
 });
 
 test('migrates the previous localStorage state into IndexedDB', async () => {

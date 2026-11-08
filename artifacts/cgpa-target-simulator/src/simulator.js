@@ -1,7 +1,8 @@
 import { readSavedState, readThemePreference, saveAppState, saveThemePreference } from './storage.js';
+import { calculateCgpaMetrics, CGPA_GRADE_POINTS, CGPA_GRADES } from '../../../lib/cgpa-calculations.js';
 
-const GRADE_POINTS = Object.freeze({ A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 });
-const GRADES = Object.keys(GRADE_POINTS);
+const GRADE_POINTS = CGPA_GRADE_POINTS;
+const GRADES = CGPA_GRADES;
 let nextId = 1;
 const id = (prefix) => `${prefix}-${Date.now().toString(36)}-${nextId++}`;
 const course = (name = 'New course', grade = 'B', creditHours = 3) => ({ id: id('course'), name, creditHours, gradeEarned: grade });
@@ -88,51 +89,7 @@ async function loadState() {
 }
 
 export function derive(state) {
-  let totalCreditsEarned = 0, totalQualityPoints = 0;
-  for (const term of state.semesters) {
-    for (const c of term.courses) {
-      const credits = numeric(c.creditHours);
-      const points = GRADE_POINTS[c.gradeEarned];
-      if (credits > 0 && points !== undefined) {
-        totalCreditsEarned += credits;
-        totalQualityPoints += credits * points;
-      }
-    }
-  }
-  let scenarioCredits = 0, scenarioQualityPoints = 0;
-  for (const c of state.scenarioCourses) {
-    const credits = numeric(c.creditHours);
-    const points = GRADE_POINTS[c.gradeEarned];
-    if (credits > 0 && points !== undefined) {
-      scenarioCredits += credits;
-      scenarioQualityPoints += credits * points;
-    }
-  }
-  const currentCumulativeGpa = totalCreditsEarned > 0 ? totalQualityPoints / totalCreditsEarned : null;
-  const projectedCredits = totalCreditsEarned + scenarioCredits;
-  const projectedQualityPoints = totalQualityPoints + scenarioQualityPoints;
-  const predictedCgpa = projectedCredits > 0 ? projectedQualityPoints / projectedCredits : null;
-  const targetValid = state.target.targetCgpa !== '' && Number.isFinite(Number(state.target.targetCgpa)) && Number(state.target.targetCgpa) >= 0 && Number(state.target.targetCgpa) <= 4;
-  const graduationCreditsValid = state.target.graduationCredits !== '' && Number.isFinite(Number(state.target.graduationCredits)) && Number(state.target.graduationCredits) > 0;
-  const goal = numeric(state.target.targetCgpa, 0, 4);
-  const graduationCredits = numeric(state.target.graduationCredits, 0, 1000);
-  const remainingSemesters = numeric(state.target.remainingSemesters, 0, 20);
-  const targetTotalQualityPoints = goal * graduationCredits;
-  const remainingCreditsToGraduation = graduationCredits - totalCreditsEarned;
-  const remainingCreditsAfterScenario = graduationCredits - projectedCredits;
-  const averageCreditsPerRemainingSemester = remainingSemesters > 0 && remainingCreditsAfterScenario >= 0
-    ? remainingCreditsAfterScenario / remainingSemesters
-    : null;
-  const requiredFutureGpa = !targetValid || !graduationCreditsValid ? null
-    : remainingCreditsAfterScenario > 0
-      ? (targetTotalQualityPoints - projectedQualityPoints) / remainingCreditsAfterScenario
-      : projectedQualityPoints >= targetTotalQualityPoints ? 0 : Infinity;
-  return {
-    totalCreditsEarned, totalQualityPoints, currentCumulativeGpa,
-    scenarioCredits, scenarioQualityPoints, projectedCredits, projectedQualityPoints, predictedCgpa,
-    goal, graduationCredits, remainingSemesters, targetTotalQualityPoints, remainingCreditsToGraduation,
-    remainingCreditsAfterScenario, averageCreditsPerRemainingSemester, requiredFutureGpa, targetValid, graduationCreditsValid,
-  };
+  return calculateCgpaMetrics(state);
 }
 
 export function statusFor(data) {
