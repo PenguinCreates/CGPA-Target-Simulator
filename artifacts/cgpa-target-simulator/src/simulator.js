@@ -1,4 +1,3 @@
-import Chart from 'chart.js/auto';
 import { readSavedState, readThemePreference, saveAppState, saveThemePreference } from './storage.js';
 
 const GRADE_POINTS = Object.freeze({ A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 });
@@ -351,24 +350,32 @@ function refreshOutputs(root, state, saved) {
 export function mountSimulator(root) {
   let state = sampleState();
   let chart = null;
+  let chartCanvas = null;
+  let ChartConstructor = null;
+  let chartLoadPromise = null;
+  let chartVisible = false;
+  let chartObserver = null;
+  let chartIdleHandle = null;
+  let chartIdleUsesTimeout = false;
   let pendingConfirmation = null;
   let lastDialogTrigger = null;
   let ready = false;
   let destroyed = false;
   let saveRevision = 0;
+  let pendingSave = false;
+  let saveInFlight = false;
+  let saveTimer = null;
   const collapsedSemesters = new Set();
-  const updateChart = () => {
+  const drawChart = () => {
     const canvas = root.querySelector('#trajectory-chart');
     const fallback = root.querySelector('.chart-fallback');
-    const ChartConstructor = Chart;
-    if (!canvas || typeof ChartConstructor !== 'function') {
-      if (canvas) canvas.hidden = true;
-      if (fallback) fallback.hidden = false;
-      return;
+    if (!canvas || !ChartConstructor || destroyed) return;
+    if (chart && chartCanvas !== canvas) {
+      chart.destroy();
+      chart = null;
     }
     if (fallback) fallback.hidden = true;
     canvas.hidden = false;
-    if (chart) chart.destroy();
     const labels = state.semesters.map((term, index) => term.name || `Semester ${index + 1}`);
     const values = state.semesters.map((term) => {
       const credits = term.courses.reduce((sum, item) => sum + numeric(item.creditHours), 0);
@@ -380,21 +387,83 @@ export function mountSimulator(root) {
     const primary = computed.getPropertyValue('--primary').trim();
     const foreground = computed.getPropertyValue('--foreground').trim();
     const border = computed.getPropertyValue('--border').trim();
-    chart = new ChartConstructor(canvas, {
-      type: 'line',
-      data: { labels, datasets: [
-        { label: 'Semester GPA', data: values, borderColor: `hsl(${primary})`, backgroundColor: `hsl(${primary} / .12)`, pointBackgroundColor: `hsl(${primary})`, pointRadius: 4, pointHoverRadius: 6, borderWidth: 3, tension: .32, spanGaps: false },
-        { label: 'Target CGPA', data: labels.map(() => target), borderColor: '#d39b37', pointRadius: 0, borderWidth: 2, borderDash: [6, 6], tension: 0, fill: false },
-      ] },
-      options: {
-        responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${Number(context.parsed.y).toFixed(2)}` } } },
-        scales: {
-          x: { grid: { display: false }, ticks: { color: `hsl(${foreground})`, maxRotation: 0, autoSkip: true }, border: { display: false } },
-          y: { min: 0, max: 4, ticks: { stepSize: 1, color: `hsl(${foreground})` }, grid: { color: `hsl(${border} / .7)` }, border: { display: false } },
+    if (!chart) {
+      chart = new ChartConstructor(canvas, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: 'Semester GPA', data: values, borderColor: `hsl(${primary})`, backgroundColor: `hsl(${primary} / .12)`, pointBackgroundColor: `hsl(${primary})`, pointRadius: 4, pointHoverRadius: 6, borderWidth: 3, tension: .32, spanGaps: false },
+          { label: 'Target CGPA', data: labels.map(() => target), borderColor: '#d39b37', pointRadius: 0, borderWidth: 2, borderDash: [6, 6], tension: 0, fill: false },
+        ] },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${Number(context.parsed.y).toFixed(2)}` } } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: `hsl(${foreground})`, maxRotation: 0, autoSkip: true }, border: { display: false } },
+            y: { min: 0, max: 4, ticks: { stepSize: 1, color: `hsl(${foreground})` }, grid: { color: `hsl(${border} / .7)` }, border: { display: false } },
+          },
         },
-      },
+      });
+      chartCanvas = canvas;
+      return;
+    }
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.data.datasets[0].borderColor = `hsl(${primary})`;
+    chart.data.datasets[0].backgroundColor = `hsl(${primary} / .12)`;
+    chart.data.datasets[0].pointBackgroundColor = `hsl(${primary})`;
+    chart.data.datasets[1].data = labels.map(() => target);
+    chart.options.scales.x.ticks.color = `hsl(${foreground})`;
+    chart.options.scales.y.ticks.color = `hsl(${foreground})`;
+    chart.options.scales.y.grid.color = `hsl(${border} / .7)`;
+    chart.update('none');
+  };
+  const loadChartModule = () => {
+    if (!chartLoadPromise) {
+      chartLoadPromise = import('chart.js/auto')
+        .then((module) => { ChartConstructor = module.default; })
+        .catch(() => {
+          const fallback = root.querySelector('.chart-fallback');
+          if (fallback) {
+            fallback.hidden = false;
+            fallback.textContent = 'Chart is unavailable. Your semester grades are still included in the calculation.';
+          }
+        })
+        .finally(() => { chartLoadPromise = null; });
+    }
+    return chartLoadPromise;
+  };
+  const updateChart = () => {
+    if (!chartVisible) return;
+    if (ChartConstructor) {
+      drawChart();
+      return;
+    }
+    const fallback = root.querySelector('.chart-fallback');
+    if (fallback && !chartLoadPromise) {
+      fallback.hidden = false;
+      fallback.textContent = 'Loading chart…';
+    }
+    void loadChartModule().then(() => {
+      if (ChartConstructor && chartVisible) drawChart();
     });
+  };
+  const observeChart = () => {
+    if (chartVisible) return;
+    const canvas = root.querySelector('#trajectory-chart');
+    if (!canvas) return;
+    if ('IntersectionObserver' in window) {
+      chartObserver?.disconnect();
+      chartObserver = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        chartVisible = true;
+        chartObserver?.disconnect();
+        updateChart();
+      }, { rootMargin: '180px' });
+      chartObserver.observe(canvas);
+      return;
+    }
+    chartVisible = true;
+    updateChart();
   };
   const refresh = (saved = false) => { refreshOutputs(root, state, saved); updateChart(); };
   const setTheme = (dark, persistPreference = false) => {
@@ -411,22 +480,38 @@ export function mountSimulator(root) {
     updateChart();
   };
   setTheme(false);
-  const persist = async () => {
-    const revision = ++saveRevision;
+  const flushSave = async () => {
+    if (saveInFlight || !pendingSave) return;
+    if (saveTimer !== null) window.clearTimeout(saveTimer);
+    saveTimer = null;
+    saveInFlight = true;
+    pendingSave = false;
+    const revision = saveRevision;
     const snapshot = JSON.parse(JSON.stringify(state));
+    const result = await saveAppState(snapshot);
+    saveInFlight = false;
+    if (!destroyed && revision === saveRevision) {
+      const message = result === 'indexeddb'
+        ? 'Saved offline on this device'
+        : result === 'localStorage'
+          ? 'Saved on this device; IndexedDB unavailable'
+          : 'Could not save on this device';
+      refreshOutputs(root, state, message);
+    }
+    if (pendingSave) void flushSave();
+  };
+  const persist = (immediate = false) => {
+    pendingSave = true;
+    saveRevision += 1;
     const indicator = root.querySelector('[data-testid="status-save"] .save-copy');
     if (indicator) indicator.textContent = 'Saving…';
-    const result = await saveAppState(snapshot);
-    if (destroyed || revision !== saveRevision) return;
-    const message = result === 'indexeddb'
-      ? 'Saved offline on this device'
-      : result === 'localStorage'
-        ? 'Saved on this device; IndexedDB unavailable'
-        : 'Could not save on this device';
-    refreshOutputs(root, state, message);
+    if (saveTimer !== null) window.clearTimeout(saveTimer);
+    if (immediate) return flushSave();
+    saveTimer = window.setTimeout(() => { void flushSave(); }, 180);
   };
-  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters); refresh(saved); };
+  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters); refresh(saved); observeChart(); };
   render(root, state, 'Loading saved plan…', collapsedSemesters);
+  observeChart();
   root.setAttribute('aria-busy', 'true');
   root.inert = true;
   void (async () => {
@@ -443,7 +528,7 @@ export function mountSimulator(root) {
     root.inert = false;
     root.setAttribute('aria-busy', 'false');
     paint(saved.source === 'indexeddb');
-    if (saved.source !== 'indexeddb') await persist();
+    if (saved.source !== 'indexeddb') await persist(true);
   })();
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
   const dialog = () => root.querySelector('[data-testid="dialog-confirmation"]');
@@ -495,12 +580,12 @@ export function mountSimulator(root) {
       const item = findCourse(el.dataset.semester, el.dataset.course);
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
       refresh(false);
-      persist();
+      persist(true);
     } else if (el instanceof HTMLSelectElement && el.dataset.kind === 'scenario-grade') {
       const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
       if (item) item.gradeEarned = GRADE_POINTS[el.value] !== undefined ? el.value : 'B';
       refresh(false);
-      persist();
+      persist(true);
     }
   });
   root.addEventListener('focusout', (event) => {
@@ -526,7 +611,7 @@ export function mountSimulator(root) {
         if (item) item.creditHours = normalized;
       }
       refresh(false);
-      persist();
+      persist(true);
     }
   });
   root.addEventListener('click', (event) => {
@@ -580,7 +665,7 @@ export function mountSimulator(root) {
       else return;
       collapsedSemesters.clear();
       paint();
-      persist();
+      persist(true);
       root.querySelector(`[data-action="${confirmedAction === 'sample' ? 'load-cs-sample' : 'clear-data'}"]`)?.focus();
       return;
     }
@@ -597,7 +682,7 @@ export function mountSimulator(root) {
     if (action === 'add-scenario-course') state.scenarioCourses.push(course('Projected course', 'B', 3));
     if (action === 'remove-scenario-course') state.scenarioCourses = state.scenarioCourses.filter((item) => item.id !== courseId);
     paint();
-    persist();
+    persist(true);
     if (action === 'add-course') {
       const inputs = root.querySelectorAll(`[data-kind="course-name"][data-semester="${termId}"]`);
       inputs[inputs.length - 1]?.focus();
@@ -607,8 +692,29 @@ export function mountSimulator(root) {
       inputs[inputs.length - 1]?.focus();
     }
   });
-  updateChart();
+  const warmChart = () => {
+    chartVisible = true;
+    chartObserver?.disconnect();
+    void loadChartModule().then(() => {
+      if (ChartConstructor) drawChart();
+    });
+  };
+  if ('requestIdleCallback' in window) {
+    chartIdleHandle = window.requestIdleCallback(warmChart, { timeout: 700 });
+  } else {
+    chartIdleUsesTimeout = true;
+    chartIdleHandle = window.setTimeout(warmChart, 500);
+  }
+  const flushOnPageHide = () => { if (pendingSave) void flushSave(); };
+  window.addEventListener('pagehide', flushOnPageHide);
   return () => {
+    window.removeEventListener('pagehide', flushOnPageHide);
+    if (chartObserver) chartObserver.disconnect();
+    if (chartIdleHandle !== null) {
+      if (chartIdleUsesTimeout) window.clearTimeout(chartIdleHandle);
+      else window.cancelIdleCallback(chartIdleHandle);
+    }
+    if (pendingSave) void flushSave();
     destroyed = true;
     chart?.destroy();
     root.replaceChildren();

@@ -43,7 +43,8 @@ function offlineShellPlugin(): Plugin {
     name: 'studyline-offline-shell',
     apply: 'build' as const,
     generateBundle(_options, bundle) {
-      const publicFiles = collectPublicFiles(path.resolve(import.meta.dirname, 'public'));
+      const publicFiles = collectPublicFiles(path.resolve(import.meta.dirname, 'public'))
+        .filter((file) => file !== 'dev-service-worker.js');
       const files = [...new Set(['index.html', ...Object.keys(bundle), ...publicFiles])]
         .filter((file) => file !== 'service-worker.js')
         .sort();
@@ -92,8 +93,12 @@ self.addEventListener('fetch', (event) => {
     try {
       const response = await fetch(request);
       if (response.ok) {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.put(request, response.clone());
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(request, response.clone());
+        } catch {
+          // Cache storage is best effort and must not interrupt online requests.
+        }
       }
       return response;
     } catch {
