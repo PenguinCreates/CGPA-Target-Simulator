@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Appearance,
   Modal,
   Platform,
   Pressable,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
@@ -28,6 +30,7 @@ type Plan = {
 };
 
 const STORAGE_KEY = 'studyline.cgpa.mobile.v1';
+const THEME_KEY = 'studyline.theme.v1';
 const GRADES: Grade[] = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'];
 const POINTS: Record<Grade, number> = { A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 };
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -104,6 +107,7 @@ type Editor = { name: string; credits: string; grade: Grade; semesterId: string 
 
 export default function SimulatorScreen() {
   const colors = useColors();
+  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const [plan, setPlan] = useState<Plan>(() => samplePlan());
   const [loaded, setLoaded] = useState(false);
@@ -127,6 +131,12 @@ export default function SimulatorScreen() {
         if (active) setLoaded(true);
       });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY).then((theme) => {
+      if (theme === 'light' || theme === 'dark') Appearance.setColorScheme(theme);
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -213,6 +223,12 @@ export default function SimulatorScreen() {
     await Share.share({ title: 'Studyline CGPA plan', message: JSON.stringify(plan, null, 2) });
   };
 
+  const toggleTheme = () => {
+    const next = scheme === 'dark' ? 'light' : 'dark';
+    Appearance.setColorScheme(next);
+    void AsyncStorage.setItem(THEME_KEY, next).catch(() => setIssue('Theme preference could not be saved.'));
+  };
+
   const statusColors = metrics.status.tone === 'success'
     ? { text: colors.success, background: colors.successSurface }
     : metrics.status.tone === 'warning'
@@ -225,7 +241,7 @@ export default function SimulatorScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAwareScrollViewCompat
         style={{ backgroundColor: colors.background }}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, webTop) + 8, paddingBottom: Math.max(insets.bottom, webBottom) + 32 }]}
+        contentContainerStyle={[styles.content, { paddingTop: webTop + 8, paddingBottom: Math.max(insets.bottom, webBottom) + 32 }]}
         keyboardShouldPersistTaps="handled"
         bottomOffset={20}
       >
@@ -235,6 +251,9 @@ export default function SimulatorScreen() {
             <View><Text style={[styles.brandName, { color: colors.foreground }]}>studyline</Text><Text style={[styles.brandSub, { color: colors.mutedForeground }]}>ACADEMIC PLANNER</Text></View>
           </View>
           <View style={styles.saveStatus}><View style={[styles.saveDot, { backgroundColor: loaded ? colors.success : colors.chartTarget }]} /><Text style={[styles.saveText, { color: colors.mutedForeground }]}>{saveLabel}</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Switch to ${scheme === 'dark' ? 'light' : 'dark'} mode`} testID="button-toggle-theme" onPress={toggleTheme} style={[styles.themeButton, { backgroundColor: colors.secondary }]}>
+            <Feather name={scheme === 'dark' ? 'sun' : 'moon'} size={16} color={colors.primary} />
+          </Pressable>
         </View>
 
         <View style={styles.intro}>
@@ -411,7 +430,7 @@ function TrajectoryChart({ semesters, target, colors }: { semesters: Semester[];
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: 18, gap: 14, maxWidth: 640, width: '100%', alignSelf: 'center' },
-  topbar: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#d2dce8', paddingBottom: 10 },
+  topbar: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 10 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   brandIcon: { width: 35, height: 35, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   brandIconText: { fontFamily: 'serif', fontSize: 23, marginTop: -3 },
@@ -420,6 +439,7 @@ const styles = StyleSheet.create({
   saveStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   saveDot: { width: 7, height: 7, borderRadius: 4 },
   saveText: { fontFamily: 'Inter_400Regular', fontSize: 10 },
+  themeButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   intro: { gap: 5, paddingTop: 4, paddingBottom: 2 },
   eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 9, letterSpacing: 1.4 },
   title: { fontFamily: 'serif', fontSize: 38, lineHeight: 42 },
