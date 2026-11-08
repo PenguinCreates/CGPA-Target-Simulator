@@ -1,1 +1,2 @@
 - [Video audio generation](video-audio-generation.md) — music-generation access may be gated by paid-mode availability; follow the skill-approved fallback and disclose it.
+- [Expo Router helper placement](expo-router-helper-placement.md) — keep non-screen modules outside `app/` so Expo Router does not register them as routes.
