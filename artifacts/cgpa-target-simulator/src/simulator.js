@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'studyline.cgpa-simulator.v1';
+import Chart from 'chart.js/auto';
+import { readSavedState, readThemePreference, saveAppState, saveThemePreference } from './storage.js';
+
 const GRADE_POINTS = Object.freeze({ A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 });
 const GRADES = Object.keys(GRADE_POINTS);
 let nextId = 1;
@@ -52,11 +54,8 @@ const numeric = (value, min = 0, max = Infinity) => {
 const escaped = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const format = (value, places = 2) => Number.isFinite(value) ? value.toFixed(places) : '—';
 
-function loadState() {
+function normalizeState(saved) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return sampleState();
-    const saved = JSON.parse(raw);
     if (!saved || !Array.isArray(saved.semesters) || !saved.target) return sampleState();
     const semesters = saved.semesters.map((item) => ({
       id: String(item.id || id('semester')),
@@ -79,7 +78,14 @@ function loadState() {
       graduationCredits: target.graduationCredits === '' ? '' : numeric(target.graduationCredits ?? 120, 0, 1000),
       remainingSemesters: target.remainingSemesters === '' || target.remainingSemesters == null ? '' : numeric(target.remainingSemesters, 0, 20),
     } };
-  } catch { return sampleState(); }
+  } catch {
+    return sampleState();
+  }
+}
+
+async function loadState() {
+  const stored = await readSavedState();
+  return { state: normalizeState(stored.value), source: stored.source };
 }
 
 export function derive(state) {
@@ -209,7 +215,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
       <header class="topbar mx-auto flex max-w-7xl items-center justify-between">
         <a class="brand" href="/" aria-label="Studyline home" data-testid="link-home"><span class="brand-mark" aria-hidden="true">s.</span><span class="brand-name">studyline <span class="brand-context">ACADEMIC PLANNER</span></span></a>
         <div class="top-meta">
-          <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${saved ? 'Saved on this device' : 'Saving…'}</span></span>
+          <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…'}</span></span>
           <button type="button" class="theme-toggle" data-action="toggle-theme" data-testid="button-theme-toggle" aria-label="Switch color theme" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
         </div>
       </header>
@@ -339,19 +345,22 @@ function refreshOutputs(root, state, saved) {
     node.textContent = `${format(credits, 1)} cr · ${format(credits ? points / credits : 0, 2)} GPA`;
   }
   const save = root.querySelector('[data-testid="status-save"] .save-copy');
-  if (save) save.textContent = saved ? 'Saved on this device' : 'Saving…';
+  if (save) save.textContent = typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…';
 }
 
 export function mountSimulator(root) {
-  let state = loadState();
+  let state = sampleState();
   let chart = null;
   let pendingConfirmation = null;
   let lastDialogTrigger = null;
+  let ready = false;
+  let destroyed = false;
+  let saveRevision = 0;
   const collapsedSemesters = new Set();
   const updateChart = () => {
     const canvas = root.querySelector('#trajectory-chart');
     const fallback = root.querySelector('.chart-fallback');
-    const ChartConstructor = window.Chart;
+    const ChartConstructor = Chart;
     if (!canvas || typeof ChartConstructor !== 'function') {
       if (canvas) canvas.hidden = true;
       if (fallback) fallback.hidden = false;
@@ -388,9 +397,9 @@ export function mountSimulator(root) {
     });
   };
   const refresh = (saved = false) => { refreshOutputs(root, state, saved); updateChart(); };
-  const setTheme = (dark) => {
+  const setTheme = (dark, persistPreference = false) => {
     document.documentElement.classList.toggle('dark', dark);
-    try { localStorage.setItem('studyline.cgpa-theme', dark ? 'dark' : 'light'); } catch { /* storage may be unavailable */ }
+    if (persistPreference) void saveThemePreference(dark ? 'dark' : 'light');
     const button = root.querySelector('[data-testid="button-theme-toggle"]');
     if (button) {
       button.setAttribute('aria-pressed', String(dark));
@@ -401,18 +410,41 @@ export function mountSimulator(root) {
     }
     updateChart();
   };
-  try { setTheme(localStorage.getItem('studyline.cgpa-theme') === 'dark'); } catch { setTheme(false); }
-  const persist = () => {
+  setTheme(false);
+  const persist = async () => {
+    const revision = ++saveRevision;
+    const snapshot = JSON.parse(JSON.stringify(state));
     const indicator = root.querySelector('[data-testid="status-save"] .save-copy');
     if (indicator) indicator.textContent = 'Saving…';
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      refreshOutputs(root, state, true);
-    } catch {
-      if (indicator) indicator.textContent = 'Could not save on this device';
-    }
+    const result = await saveAppState(snapshot);
+    if (destroyed || revision !== saveRevision) return;
+    const message = result === 'indexeddb'
+      ? 'Saved offline on this device'
+      : result === 'localStorage'
+        ? 'Saved on this device; IndexedDB unavailable'
+        : 'Could not save on this device';
+    refreshOutputs(root, state, message);
   };
-  const paint = () => { render(root, state, true, collapsedSemesters); refresh(true); setTheme(document.documentElement.classList.contains('dark')); };
+  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters); refresh(saved); };
+  render(root, state, 'Loading saved plan…', collapsedSemesters);
+  root.setAttribute('aria-busy', 'true');
+  root.inert = true;
+  void (async () => {
+    const saved = await loadState();
+    if (destroyed) return;
+    state = saved.state;
+    const theme = await readThemePreference();
+    if (destroyed) return;
+    if (theme) {
+      setTheme(theme === 'dark');
+      void saveThemePreference(theme);
+    }
+    ready = true;
+    root.inert = false;
+    root.setAttribute('aria-busy', 'false');
+    paint(saved.source === 'indexeddb');
+    if (saved.source !== 'indexeddb') await persist();
+  })();
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
   const dialog = () => root.querySelector('[data-testid="dialog-confirmation"]');
   const openConfirmation = (action, trigger) => {
@@ -437,6 +469,7 @@ export function mountSimulator(root) {
   }, true);
 
   root.addEventListener('input', (event) => {
+    if (!ready) return;
     const el = event.target;
     if (!(el instanceof HTMLInputElement) || !el.dataset.kind) return;
     if (el.dataset.kind === 'target') {
@@ -456,6 +489,7 @@ export function mountSimulator(root) {
     persist();
   });
   root.addEventListener('change', (event) => {
+    if (!ready) return;
     const el = event.target;
     if (el instanceof HTMLSelectElement && el.dataset.kind === 'course-grade') {
       const item = findCourse(el.dataset.semester, el.dataset.course);
@@ -470,6 +504,7 @@ export function mountSimulator(root) {
     }
   });
   root.addEventListener('focusout', (event) => {
+    if (!ready) return;
     const el = event.target;
     if (!(el instanceof HTMLInputElement) || el.type !== 'number' || el.value === '') return;
     const bounds = el.dataset.key === 'targetCgpa' || el.id === 'target-cgpa'
@@ -495,11 +530,12 @@ export function mountSimulator(root) {
     }
   });
   root.addEventListener('click', (event) => {
+    if (!ready) return;
     const button = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!button) return;
     const { action, semester: termId, course: courseId } = button.dataset;
     if (action === 'toggle-theme') {
-      setTheme(!document.documentElement.classList.contains('dark'));
+      setTheme(!document.documentElement.classList.contains('dark'), true);
       return;
     }
     if (action === 'toggle-semester') {
@@ -571,6 +607,10 @@ export function mountSimulator(root) {
       inputs[inputs.length - 1]?.focus();
     }
   });
-  paint();
-  return () => { root.replaceChildren(); };
+  updateChart();
+  return () => {
+    destroyed = true;
+    chart?.destroy();
+    root.replaceChildren();
+  };
 }

@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
+import { readdirSync } from 'node:fs';
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -27,11 +29,90 @@ if (!basePath) {
   );
 }
 
+function collectPublicFiles(directory: string, prefix = ''): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = path.posix.join(prefix, entry.name);
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectPublicFiles(absolutePath, relativePath);
+    return entry.isFile() ? [relativePath] : [];
+  });
+}
+
+function offlineShellPlugin(): Plugin {
+  return {
+    name: 'studyline-offline-shell',
+    apply: 'build' as const,
+    generateBundle(_options, bundle) {
+      const publicFiles = collectPublicFiles(path.resolve(import.meta.dirname, 'public'));
+      const files = [...new Set(['index.html', ...Object.keys(bundle), ...publicFiles])]
+        .filter((file) => file !== 'service-worker.js')
+        .sort();
+      const version = createHash('sha256').update(files.join('\n')).digest('hex').slice(0, 12);
+      const precacheUrls = files.map((file) => `${basePath}${file}`);
+      const worker = `
+const CACHE_NAME = 'studyline-shell-${version}';
+const PRECACHE_URLS = ${JSON.stringify(precacheUrls)};
+const SHELL_URL = new URL(${JSON.stringify(`${basePath}index.html`)}, self.location.origin).href;
+
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(PRECACHE_URLS);
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith('studyline-shell-') && name !== CACHE_NAME).map((name) => caches.delete(name)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  if (request.mode === 'navigate' && url.pathname.startsWith(new URL(self.registration.scope).pathname)) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(request);
+      } catch {
+        return (await caches.match(request)) || (await caches.match(SHELL_URL)) || Response.error();
+      }
+    })());
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      return response;
+    } catch {
+      return Response.error();
+    }
+  })());
+});
+`;
+      this.emitFile({ type: 'asset', fileName: 'service-worker.js', source: worker });
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
+    offlineShellPlugin(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
