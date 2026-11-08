@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -53,9 +53,33 @@ export default function HomeScreen() {
   const [issue, setIssue] = useState('');
   const [creditDrafts, setCreditDrafts] = useState<Record<string, string>>({});
   const [targetDrafts, setTargetDrafts] = useState<Partial<Record<keyof Plan['target'], string>>>({});
+  const latestPlanRef = useRef(plan);
+  latestPlanRef.current = plan;
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveRevisionRef = useRef(0);
   const metrics = useMemo(() => calculate(plan), [plan]);
   const webTop = Platform.OS === 'web' ? 67 : 12;
   const webBottom = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
+
+  const persistLatest = useCallback(() => {
+    if (!loaded) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const revision = ++saveRevisionRef.current;
+    const serialized = JSON.stringify(latestPlanRef.current);
+    const write = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => AsyncStorage.setItem(STORAGE_KEY, serialized));
+    saveQueueRef.current = write.then(() => undefined, () => undefined);
+    void write.then(() => {
+      if (revision === saveRevisionRef.current) setIssue('');
+    }).catch(() => {
+      if (revision === saveRevisionRef.current) setIssue('This plan could not be saved on this device.');
+    });
+  }, [loaded]);
 
   useEffect(() => {
     let active = true;
@@ -71,24 +95,46 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(plan)).then(() => setIssue('')).catch(() => {
-      setIssue('This plan could not be saved on this device.');
+    const timer = setTimeout(() => {
+      if (saveTimerRef.current === timer) saveTimerRef.current = null;
+      persistLatest();
+    }, 350);
+    saveTimerRef.current = timer;
+    return () => {
+      clearTimeout(timer);
+      if (saveTimerRef.current === timer) saveTimerRef.current = null;
+    };
+  }, [loaded, plan, persistLatest]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'inactive' || nextState === 'background') persistLatest();
     });
-  }, [loaded, plan]);
+    return () => {
+      subscription.remove();
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      persistLatest();
+    };
+  }, [persistLatest]);
 
-  const addSemester = () => {
-    const next: Semester = { id: id('semester'), name: `Semester ${plan.semesters.length + 1}`, courses: [] };
-    setPlan((current) => ({ ...current, semesters: [...current.semesters, next] }));
-  };
+  const addSemester = useCallback(() => {
+    setPlan((current) => {
+      const next: Semester = { id: id('semester'), name: `Semester ${current.semesters.length + 1}`, courses: [] };
+      return { ...current, semesters: [...current.semesters, next] };
+    });
+  }, []);
 
-  const addCourse = (semesterId?: string) => {
+  const addCourse = useCallback((semesterId?: string) => {
     const next: Course = { id: id('course'), name: '', creditHours: 3, gradeEarned: 'B' };
     setPlan((current) => semesterId
       ? { ...current, semesters: current.semesters.map((semester) => semester.id === semesterId ? { ...semester, courses: [...semester.courses, next] } : semester) }
       : { ...current, scenarioCourses: [...current.scenarioCourses, next] });
-  };
+  }, []);
 
-  const updateCourse = (courseId: string, semesterId: string | null, update: Partial<Course>) => {
+  const updateCourse = useCallback((courseId: string, semesterId: string | null, update: Partial<Course>) => {
     setPlan((current) => semesterId
       ? {
           ...current,
@@ -97,9 +143,9 @@ export default function HomeScreen() {
             : semester),
         }
       : { ...current, scenarioCourses: current.scenarioCourses.map((course) => course.id === courseId ? { ...course, ...update } : course) });
-  };
+  }, []);
 
-  const removeCourse = (courseId: string, semesterId: string | null) => {
+  const removeCourse = useCallback((courseId: string, semesterId: string | null) => {
     setCreditDrafts((current) => {
       const next = { ...current };
       delete next[courseId];
@@ -113,21 +159,37 @@ export default function HomeScreen() {
             : semester),
         }
       : { ...current, scenarioCourses: current.scenarioCourses.filter((course) => course.id !== courseId) });
-  };
+  }, []);
 
-  const updateCourseCredits = (courseId: string, semesterId: string | null, text: string) => {
+  const updateCourseCredits = useCallback((courseId: string, semesterId: string | null, text: string) => {
     setCreditDrafts((current) => ({ ...current, [courseId]: text }));
     const credits = text.trim() === '' ? '' : Number(text);
     if (credits === '' || Number.isFinite(credits)) updateCourse(courseId, semesterId, { creditHours: credits });
-  };
+  }, [updateCourse]);
 
-  const updateTarget = (key: keyof Plan['target'], text: string) => {
+  const updateTarget = useCallback((key: keyof Plan['target'], text: string) => {
     setTargetDrafts((current) => ({ ...current, [key]: text }));
     const value = text.trim() === '' ? '' : Number(text);
     if (value === '' || Number.isFinite(value)) {
       setPlan((current) => ({ ...current, target: { ...current.target, [key]: value } }));
     }
-  };
+  }, []);
+
+  const handleCourseNameChange = useCallback((courseId: string, semesterId: string | null, name: string) => {
+    updateCourse(courseId, semesterId, { name });
+  }, [updateCourse]);
+  const handleCourseCreditsChange = useCallback((courseId: string, semesterId: string | null, text: string) => {
+    updateCourseCredits(courseId, semesterId, text);
+  }, [updateCourseCredits]);
+  const handleCourseCreditsBlur = useCallback((courseId: string, credits: Course['creditHours']) => {
+    setCreditDrafts((current) => ({ ...current, [courseId]: String(credits) }));
+  }, []);
+  const handleCourseGradePress = useCallback((courseId: string, semesterId: string | null, grade: Grade) => {
+    updateCourse(courseId, semesterId, { gradeEarned: GRADES[(GRADES.indexOf(grade) + 1) % GRADES.length] });
+  }, [updateCourse]);
+  const handleCourseRemove = useCallback((courseId: string, semesterId: string | null) => {
+    removeCourse(courseId, semesterId);
+  }, [removeCourse]);
 
   const targetValue = (key: keyof Plan['target']) => targetDrafts[key] ?? String(plan.target[key]);
   const statusColor = metrics.status.tone === 'success'
@@ -213,13 +275,14 @@ export default function HomeScreen() {
                 <CourseEditor
                   key={course.id}
                   course={course}
+                  semesterId={semester.id}
                   creditsText={creditDrafts[course.id] ?? String(course.creditHours)}
                   colors={colors}
-                  onNameChange={(name) => updateCourse(course.id, semester.id, { name })}
-                  onCreditsChange={(text) => updateCourseCredits(course.id, semester.id, text)}
-                  onBlurCredits={() => setCreditDrafts((current) => ({ ...current, [course.id]: String(course.creditHours) }))}
-                  onGradePress={() => cycleGrade(course, (grade) => updateCourse(course.id, semester.id, { gradeEarned: grade }))}
-                  onRemove={() => removeCourse(course.id, semester.id)}
+                  onNameChange={handleCourseNameChange}
+                  onCreditsChange={handleCourseCreditsChange}
+                  onBlurCredits={handleCourseCreditsBlur}
+                  onGradePress={handleCourseGradePress}
+                  onRemove={handleCourseRemove}
                 />
               ))}
               <ActionButton label="Add completed course" icon="plus" onPress={() => addCourse(semester.id)} colors={colors} />
@@ -255,13 +318,14 @@ export default function HomeScreen() {
           <CourseEditor
             key={course.id}
             course={course}
+            semesterId={null}
             creditsText={creditDrafts[course.id] ?? String(course.creditHours)}
             colors={colors}
-            onNameChange={(name) => updateCourse(course.id, null, { name })}
-            onCreditsChange={(text) => updateCourseCredits(course.id, null, text)}
-            onBlurCredits={() => setCreditDrafts((current) => ({ ...current, [course.id]: String(course.creditHours) }))}
-            onGradePress={() => cycleGrade(course, (grade) => updateCourse(course.id, null, { gradeEarned: grade }))}
-            onRemove={() => removeCourse(course.id, null)}
+            onNameChange={handleCourseNameChange}
+            onCreditsChange={handleCourseCreditsChange}
+            onBlurCredits={handleCourseCreditsBlur}
+            onGradePress={handleCourseGradePress}
+            onRemove={handleCourseRemove}
           />
         ))}
         <ActionButton label="Add hypothetical course" icon="plus" onPress={() => addCourse()} colors={colors} testID="button-add-scenario-course" />
@@ -271,10 +335,6 @@ export default function HomeScreen() {
       <Text style={[styles.footer, { color: colors.mutedForeground }]}>Your plan stays on this device. Confirm degree requirements with your university.</Text>
     </KeyboardAwareScrollViewCompat>
   );
-}
-
-function cycleGrade(course: Course, update: (grade: Grade) => void) {
-  update(GRADES[(GRADES.indexOf(course.gradeEarned) + 1) % GRADES.length]);
 }
 
 type Palette = ReturnType<typeof useColors>;
@@ -318,15 +378,16 @@ function TargetField({ label, value, suffix, onChangeText, colors }: {
   );
 }
 
-function CourseEditor({ course, creditsText, colors, onNameChange, onCreditsChange, onBlurCredits, onGradePress, onRemove }: {
+const CourseEditor = memo(function CourseEditor({ course, semesterId, creditsText, colors, onNameChange, onCreditsChange, onBlurCredits, onGradePress, onRemove }: {
   course: Course;
+  semesterId: string | null;
   creditsText: string;
   colors: Palette;
-  onNameChange: (name: string) => void;
-  onCreditsChange: (text: string) => void;
-  onBlurCredits: () => void;
-  onGradePress: () => void;
-  onRemove: () => void;
+  onNameChange: (courseId: string, semesterId: string | null, name: string) => void;
+  onCreditsChange: (courseId: string, semesterId: string | null, text: string) => void;
+  onBlurCredits: (courseId: string, credits: Course['creditHours']) => void;
+  onGradePress: (courseId: string, semesterId: string | null, grade: Grade) => void;
+  onRemove: (courseId: string, semesterId: string | null) => void;
 }) {
   return (
     <View style={[styles.course, { borderColor: colors.border }]}>
@@ -334,12 +395,12 @@ function CourseEditor({ course, creditsText, colors, onNameChange, onCreditsChan
         <TextInput
           accessibilityLabel="Course name"
           value={course.name}
-          onChangeText={onNameChange}
+          onChangeText={(name) => onNameChange(course.id, semesterId, name)}
           placeholder="Course name"
           placeholderTextColor={colors.mutedForeground}
           style={[styles.courseNameInput, { color: colors.foreground }]}
         />
-        <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${course.name || 'course'}`} onPress={onRemove} hitSlop={8} style={styles.removeButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${course.name || 'course'}`} onPress={() => onRemove(course.id, semesterId)} hitSlop={8} style={styles.removeButton}>
           <Feather name="x" size={18} color={colors.destructive} />
         </Pressable>
       </View>
@@ -350,20 +411,20 @@ function CourseEditor({ course, creditsText, colors, onNameChange, onCreditsChan
             accessibilityLabel="Course credit hours"
             testID={`input-course-credits-${course.id}`}
             value={creditsText}
-            onChangeText={onCreditsChange}
-            onBlur={onBlurCredits}
+            onChangeText={(text) => onCreditsChange(course.id, semesterId, text)}
+            onBlur={() => onBlurCredits(course.id, course.creditHours)}
             keyboardType="decimal-pad"
             style={[styles.creditInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
           />
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Projected grade ${course.gradeEarned}. Tap to change.`} onPress={onGradePress} style={[styles.gradeButton, { backgroundColor: colors.secondary }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Projected grade ${course.gradeEarned}. Tap to change.`} onPress={() => onGradePress(course.id, semesterId, course.gradeEarned)} style={[styles.gradeButton, { backgroundColor: colors.secondary }]}>
           <Text style={[styles.gradeText, { color: colors.primary }]}>{course.gradeEarned} · {POINTS[course.gradeEarned].toFixed(1)}</Text>
           <Feather name="refresh-cw" size={13} color={colors.primary} />
         </Pressable>
       </View>
     </View>
   );
-}
+});
 
 function ActionButton({ label, icon, onPress, colors, testID }: {
   label: string; icon: string; onPress: () => void; colors: Palette; testID?: string;

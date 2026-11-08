@@ -542,8 +542,7 @@ export function mountSimulator(root) {
     saveInFlight = true;
     pendingSave = false;
     const revision = saveRevision;
-    const snapshot = JSON.parse(JSON.stringify(state));
-    const result = await saveAppState(snapshot);
+    const result = await saveAppState(state);
     saveInFlight = false;
     if (!destroyed && revision === saveRevision) {
       const message = result === 'indexeddb'
