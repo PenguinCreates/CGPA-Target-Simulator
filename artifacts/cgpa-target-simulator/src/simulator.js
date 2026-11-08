@@ -169,6 +169,49 @@ function semesterGpaRowsMarkup(state) {
   }).join('');
 }
 
+export function printSummaryMarkup(state) {
+  const data = derive(state);
+  const status = statusFor(data);
+  const currentGpa = data.currentCumulativeGpa === null ? '—' : format(data.currentCumulativeGpa);
+  const targetGpa = data.targetValid ? format(data.goal) : '—';
+  const graduationCredits = data.graduationCreditsValid ? format(data.graduationCredits, 1) : '—';
+  const semesters = state.semesters.length
+    ? state.semesters.map((term, index) => {
+      const { credits, gpa } = semesterMetrics(term);
+      return `<tr>
+        <th scope="row">${escaped(term.name || `Semester ${index + 1}`)}</th>
+        <td>${gpa === null ? 'No GPA' : format(gpa)}</td>
+        <td>${format(credits, 1)} cr</td>
+      </tr>`;
+    }).join('')
+    : '<tr><td colspan="3">No completed semesters recorded.</td></tr>';
+  const scenario = state.scenarioCourses.length
+    ? `<p class="print-scenario">What-if courses included: ${format(data.scenarioCredits, 1)} credits · Predicted CGPA ${data.predictedCgpa === null ? '—' : format(data.predictedCgpa)}</p>`
+    : '';
+
+  return `<section class="print-only-summary" aria-labelledby="print-summary-title">
+    <header class="print-summary-header">
+      <div><p class="print-eyebrow">STUDYLINE · ACADEMIC PLANNER</p><h1 id="print-summary-title">CGPA progress summary</h1></div>
+      <p>Personal study plan</p>
+    </header>
+    <dl class="print-metrics">
+      <div><dt>Current CGPA</dt><dd>${currentGpa}<small> / 4.0</small></dd></div>
+      <div><dt>Target CGPA</dt><dd>${targetGpa}<small> / 4.0</small></dd></div>
+      <div><dt>Required remaining GPA</dt><dd>${formatRequired(data.requiredFutureGpa)}<small> / 4.0</small></dd></div>
+      <div><dt>Credits completed</dt><dd>${format(data.totalCreditsEarned, 1)}<small> credits</small></dd></div>
+      <div><dt>Degree credit total</dt><dd>${graduationCredits}<small> credits</small></dd></div>
+    </dl>
+    <p class="print-status"><strong>${escaped(status.label)}:</strong> ${escaped(status.copy)}</p>
+    ${scenario}
+    <h2>Semester GPA results</h2>
+    <table class="print-semester-table">
+      <thead><tr><th scope="col">Semester</th><th scope="col">Semester GPA</th><th scope="col">Credits</th></tr></thead>
+      <tbody>${semesters}</tbody>
+    </table>
+    <p class="print-disclaimer">Projection is an estimate based on the grades and degree assumptions entered in this plan.</p>
+  </section>`;
+}
+
 function gradeOptions(selected) {
   return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
 }
@@ -243,6 +286,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
           </div>
           <div class="academic-note"><span class="academic-note-mark" aria-hidden="true">↗</span><span><strong>Plan with confidence</strong><small>Every grade updates your outlook instantly.</small></span></div>
         </section>
+        ${printSummaryMarkup(state)}
         <nav class="action-toolbar" aria-label="Plan actions">
           <button type="button" class="button button-soft" data-action="export-json" data-testid="button-export-json"><span aria-hidden="true">↓</span> Export JSON</button>
           <button type="button" class="button button-soft" data-action="print-summary" data-testid="button-print-summary"><span aria-hidden="true">▤</span> Print summary</button>
@@ -334,6 +378,8 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
 
 function refreshOutputs(root, state, saved) {
   const data = derive(state), status = statusFor(data), required = data.requiredFutureGpa;
+  const printSummary = root.querySelector('.print-only-summary');
+  if (printSummary) printSummary.outerHTML = printSummaryMarkup(state);
   const set = (testid, value) => root.querySelectorAll(`[data-testid="${testid}"]`).forEach((node) => { node.textContent = value; });
   set('text-required-gpa', formatRequired(required));
   set('text-required-gpa-detail', formatRequired(required));
@@ -668,6 +714,7 @@ export function mountSimulator(root) {
       return;
     }
     if (action === 'print-summary') {
+      refreshOutputs(root, state, false);
       window.print();
       return;
     }

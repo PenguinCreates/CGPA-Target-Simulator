@@ -369,3 +369,53 @@ test("the dashboard remains editable after offline reload and saves edits after 
     await context.close();
   }
 });
+
+test("print media shows the latest read-only progress summary", async () => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  try {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.locator('[data-testid="button-print-summary"]').waitFor();
+    const summary = page.locator(".print-only-summary");
+    const initialCgpa = await summary.locator(".print-metrics > div").nth(0).locator("dd").innerText();
+
+    await page.locator('[data-testid="input-target-cgpa"]').fill("3.8");
+    await page.locator('[data-testid^="select-course-grade-"]').first().selectOption("F");
+    assert.equal(
+      await summary.locator(".print-metrics > div").nth(1).locator("dd").innerText(),
+      "3.80 / 4.0",
+    );
+    assert.notEqual(
+      await summary.locator(".print-metrics > div").nth(0).locator("dd").innerText(),
+      initialCgpa,
+      "the printed current CGPA should reflect edited coursework",
+    );
+
+    await page.emulateMedia({ media: "print" });
+    const printStyles = await page.evaluate(() => {
+      const summary = document.querySelector(".print-only-summary");
+      const toolbar = document.querySelector(".action-toolbar");
+      const metrics = document.querySelector(".metric-grid");
+      const hiddenSiblings = [...document.querySelectorAll(".main-content > *")]
+        .filter((element) => !element.classList.contains("print-only-summary"))
+        .every((element) => getComputedStyle(element).display === "none");
+      return {
+        mediaMatches: matchMedia("print").matches,
+        summaryDisplay: getComputedStyle(summary).display,
+        toolbarDisplay: getComputedStyle(toolbar).display,
+        metricsDisplay: getComputedStyle(metrics).display,
+        hiddenSiblings,
+      };
+    });
+    assert.deepEqual(printStyles, {
+      mediaMatches: true,
+      summaryDisplay: "block",
+      toolbarDisplay: "none",
+      metricsDisplay: "none",
+      hiddenSiblings: true,
+    });
+  } finally {
+    await context.close();
+  }
+});
