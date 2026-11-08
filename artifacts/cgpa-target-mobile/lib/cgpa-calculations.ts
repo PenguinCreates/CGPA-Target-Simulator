@@ -7,9 +7,11 @@ import {
 export type Grade = 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D+' | 'D' | 'F';
 export type Course = { id: string; name: string; creditHours: number | ''; gradeEarned: Grade };
 export type Semester = { id: string; name: string; courses: Course[] };
+export type GradeScale = Record<Grade, number>;
 export type Plan = {
   semesters: Semester[];
   scenarioCourses: Course[];
+  gradeScale?: GradeScale;
   target: { targetCgpa: number | ''; graduationCredits: number | ''; remainingSemesters: number | '' };
 };
 
@@ -27,7 +29,7 @@ export function calculate(plan: Plan) {
           ? { label: 'Scenario exceeds remaining credits', tone: 'warning' as const }
           : !metrics.targetValid || requiredFutureGpa === null
             ? { label: 'Target needed', tone: 'warning' as const }
-            : requiredFutureGpa > 4
+              : requiredFutureGpa > metrics.maxGradePoint
               ? { label: 'Out of reach', tone: 'danger' as const }
               : requiredFutureGpa < 2
                 ? { label: 'Easily achievable', tone: 'success' as const }

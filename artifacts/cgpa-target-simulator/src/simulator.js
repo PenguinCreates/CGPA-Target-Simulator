@@ -19,6 +19,7 @@ export function sampleState() {
       courses: items.map(([name, grade]) => ({ id: id('course'), name, creditHours: 3, gradeEarned: grade })),
     })),
     scenarioCourses: [],
+    gradeScale: { ...GRADE_POINTS },
     target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
   };
 }
@@ -27,6 +28,7 @@ function emptyState() {
   return {
     semesters: [],
     scenarioCourses: [],
+    gradeScale: { ...GRADE_POINTS },
     target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
   };
 }
@@ -43,6 +45,7 @@ function sampleCsState() {
       courses: items.map(([name, grade]) => ({ id: id('course'), name, creditHours: 3, gradeEarned: grade })),
     })),
     scenarioCourses: [],
+    gradeScale: { ...GRADE_POINTS },
     target: { targetCgpa: 3.6, graduationCredits: 120, remainingSemesters: 4 },
   };
 }
@@ -57,6 +60,12 @@ const format = (value, places = 2) => Number.isFinite(value) ? value.toFixed(pla
 function normalizeState(saved) {
   try {
     if (!saved || !Array.isArray(saved.semesters) || !saved.target) return sampleState();
+    const gradeScale = Object.fromEntries(GRADES.map((grade) => {
+      const point = saved.gradeScale?.[grade];
+      return [grade, point !== '' && point != null && Number.isFinite(Number(point))
+        ? numeric(point, 0, 4)
+        : GRADE_POINTS[grade]];
+    }));
     const semesters = saved.semesters.map((item) => ({
       id: String(item.id || id('semester')),
       name: String(item.name ?? ''),
@@ -73,7 +82,7 @@ function normalizeState(saved) {
       gradeEarned: GRADE_POINTS[c.gradeEarned] !== undefined ? c.gradeEarned : 'B',
     })) : [];
     const target = saved.target;
-    return { semesters, scenarioCourses, target: {
+    return { semesters, scenarioCourses, gradeScale, target: {
       targetCgpa: target.targetCgpa === '' || target.targetCgpa == null ? '' : numeric(target.targetCgpa, 0, 4),
       graduationCredits: target.graduationCredits === '' ? '' : numeric(target.graduationCredits ?? 120, 0, 1000),
       remainingSemesters: target.remainingSemesters === '' || target.remainingSemesters == null ? '' : numeric(target.remainingSemesters, 0, 20),
@@ -112,17 +121,17 @@ export function derive(state) {
   return calculateCgpaMetrics(state);
 }
 
-function semesterTotals(term) {
+function semesterTotals(term, gradeScale = GRADE_POINTS) {
   return term.courses.reduce((totals, item) => {
     const courseCredits = numeric(item.creditHours);
     totals.credits += courseCredits;
-    totals.qualityPoints += courseCredits * (GRADE_POINTS[item.gradeEarned] ?? 0);
+    totals.qualityPoints += courseCredits * (gradeScale[item.gradeEarned] ?? 0);
     return totals;
   }, { credits: 0, qualityPoints: 0 });
 }
 
-export function summarizeSemester(term) {
-  const { credits, qualityPoints } = semesterTotals(term);
+export function summarizeSemester(term, gradeScale = GRADE_POINTS) {
+  const { credits, qualityPoints } = semesterTotals(term, gradeScale);
   const gpa = credits ? qualityPoints / credits : 0;
   return {
     credits,
@@ -131,11 +140,11 @@ export function summarizeSemester(term) {
   };
 }
 
-export function summarizeCumulativeSemesters(semesters) {
+export function summarizeCumulativeSemesters(semesters, gradeScale = GRADE_POINTS) {
   let credits = 0;
   let qualityPoints = 0;
   return semesters.map((term, index) => {
-    const totals = semesterTotals(term);
+    const totals = semesterTotals(term, gradeScale);
     credits += totals.credits;
     qualityPoints += totals.qualityPoints;
     const cgpa = credits ? qualityPoints / credits : null;
@@ -150,12 +159,12 @@ export function summarizeCumulativeSemesters(semesters) {
 }
 
 export function statusFor(data) {
-  const { requiredFutureGpa, remainingCreditsAfterScenario, projectedQualityPoints, targetTotalQualityPoints } = data;
+  const { requiredFutureGpa, remainingCreditsAfterScenario, projectedQualityPoints, targetTotalQualityPoints, maxGradePoint = 4 } = data;
   if (!data.graduationCreditsValid) return { kind: 'warning', label: 'Graduation credits needed', copy: 'Enter the total credit hours required for your degree.' };
   if (data.remainingCreditsToGraduation < 0) return { kind: 'warning', label: 'Credits exceed degree total', copy: 'Your completed credits are higher than the graduation-credit setting. Check that total before using the projection.' };
   if (data.scenarioExceedsRemainingCredits) return { kind: 'warning', label: 'Scenario exceeds remaining credits', copy: 'These hypothetical courses exceed the credits still needed for graduation. Adjust the scenario or degree total.' };
   if (!data.targetValid) return { kind: 'warning', label: 'Target needed', copy: 'Enter a target from 0.00 to 4.00 to see your projection.' };
-  if (requiredFutureGpa > 4) return { kind: 'unreachable', label: 'Mathematically Impossible', copy: 'This target would require more than a 4.0 average in the remaining graduation credits.' };
+  if (requiredFutureGpa > maxGradePoint) return { kind: 'unreachable', label: 'Mathematically Impossible', copy: `This target would require more than a ${format(maxGradePoint, 2)} average in the remaining graduation credits.` };
   if (requiredFutureGpa < 2) return { kind: 'success', label: 'Easily Achievable', copy: 'The remaining average needed is below 2.0. The what-if courses are included in this calculation.' };
   if (data.remainingCreditsAfterScenario === 0 && projectedQualityPoints >= targetTotalQualityPoints) return { kind: 'success', label: 'Goal met at graduation', copy: 'Your completed record and what-if courses meet the target quality points for the graduation-credit total.' };
   if (requiredFutureGpa >= 3.7) return { kind: 'warning', label: 'A focused stretch', copy: 'This is possible on a 4.0 scale, but it calls for a consistently strong average in your remaining credits.' };
@@ -165,7 +174,14 @@ export function statusFor(data) {
 const formatRequired = (value) => value === Infinity ? '∞' : value === null ? '—' : format(value);
 
 function gradeOptions(selected) {
-  return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade} · ${format(GRADE_POINTS[grade], 1)}</option>`).join('');
+  return GRADES.map((grade) => `<option value="${grade}" ${grade === selected ? 'selected' : ''}>${grade}</option>`).join('');
+}
+
+function gradeScaleMarkup(gradeScale) {
+  return GRADES.map((grade) => `<div class="setting-control grade-scale-control">
+    <label class="input-label" for="grade-scale-${grade}">${grade} points</label>
+    <input id="grade-scale-${grade}" class="setting-input" data-kind="grade-scale" data-grade="${grade}" data-testid="input-grade-scale-${grade}" type="number" min="0" max="4" step="0.01" value="${escaped(gradeScale[grade])}" aria-label="${grade} grade point value">
+  </div>`).join('');
 }
 
 function semesterMarkup(term, index, collapsedSemesters = new Set(), cumulativeSummary) {
@@ -221,7 +237,7 @@ function scenarioCourseMarkup(c) {
 
 function render(root, state, saved = true, collapsedSemesters = new Set()) {
   const data = derive(state);
-  const cumulativeSummaries = summarizeCumulativeSemesters(state.semesters);
+  const cumulativeSummaries = summarizeCumulativeSemesters(state.semesters, state.gradeScale);
   const currentGpa = data.currentCumulativeGpa;
   const predictedGpa = data.predictedCgpa;
   const status = statusFor(data);
@@ -285,6 +301,11 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
               <div class="setting-control"><label class="input-label" for="graduation-credits">Total degree credits</label><input id="graduation-credits" class="setting-input" data-kind="target" data-key="graduationCredits" data-testid="input-graduation-credits" type="number" min="1" max="1000" step="1" value="${escaped(state.target.graduationCredits)}" aria-describedby="graduation-credits-hint"><p class="hint" id="graduation-credits-hint">Credits required to graduate; default 120.</p></div>
               <div class="setting-control"><label class="input-label" for="remaining-semesters">Semesters left</label><input id="remaining-semesters" class="setting-input" data-kind="target" data-key="remainingSemesters" data-testid="input-remaining-semesters" type="number" min="0" max="20" step="1" value="${escaped(state.target.remainingSemesters)}" aria-describedby="semesters-hint"><p class="hint" id="semesters-hint">Used to estimate credits per term.</p></div>
             </div>
+            <section class="grade-scale-settings" aria-labelledby="grade-scale-title">
+              <h3 class="breakdown-title" id="grade-scale-title">University grade scale</h3>
+              <p class="hint">Set the point value used for each letter grade (0–4.00).</p>
+              <div class="grade-scale-grid">${gradeScaleMarkup(state.gradeScale)}</div>
+            </section>
             <section class="projection-box" aria-live="polite" aria-atomic="true">
               <div class="projection-label">Required GPA for remaining credits</div>
               <div class="projection-value ${status.kind === 'unreachable' ? 'is-unreachable' : ''}" data-testid="text-required-gpa-detail">${formatRequired(required)}</div>
@@ -318,7 +339,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
           </div>
           <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
-        <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span>Grade scale: A 4.0 · B+ 3.5 · B 3.0 · C+ 2.5 · C 2.0 · D+ 1.5 · D 1.0 · F 0.0</span></footer>
+        <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span data-testid="text-grade-scale-summary">${GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · ')}</span></footer>
       </main>
       <dialog class="confirm-dialog" data-testid="dialog-confirmation" aria-labelledby="confirm-title" aria-describedby="confirm-copy">
         <div class="confirm-dialog-content">
@@ -367,6 +388,7 @@ function refreshOutputs(root, state, saved) {
   set('text-credits-to-graduation', `${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr`);
   set('text-remaining-after-scenario', `${format(Math.max(0, data.remainingCreditsAfterScenario), 1)} cr`);
   set('text-average-credits-per-term', `${format(data.averageCreditsPerRemainingSemester, 1)} cr`);
+  set('text-grade-scale-summary', GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · '));
   set('text-predicted-cgpa', data.predictedCgpa === null ? '—' : format(data.predictedCgpa));
   set('text-scenario-summary', `${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points`);
   const scenarioWarning = root.querySelector('[data-testid="warning-scenario-credit-overage"]');
@@ -382,13 +404,13 @@ function refreshOutputs(root, state, saved) {
   for (const term of state.semesters) {
     const node = root.querySelector(`[data-term-summary="${term.id}"]`);
     if (!node) continue;
-    const summary = summarizeSemester(term);
+    const summary = summarizeSemester(term, state.gradeScale);
     node.textContent = summary.label;
     node.setAttribute('aria-label', summary.label);
   }
   const cumulativeNodes = new Map([...root.querySelectorAll('[data-cumulative-summary]')]
     .map((node) => [node.dataset.cumulativeSummary, node]));
-  for (const summary of summarizeCumulativeSemesters(state.semesters)) {
+  for (const summary of summarizeCumulativeSemesters(state.semesters, state.gradeScale)) {
     const node = cumulativeNodes.get(String(summary.id));
     if (!node) continue;
     node.setAttribute('aria-label', summary.label);
@@ -434,7 +456,7 @@ export function mountSimulator(root) {
     canvas.hidden = false;
     const labels = state.semesters.map((term, index) => term.name || `Semester ${index + 1}`);
     const values = state.semesters.map((term) => {
-      const { credits, gpa } = summarizeSemester(term);
+      const { credits, gpa } = summarizeSemester(term, state.gradeScale);
       return credits ? Number(gpa.toFixed(3)) : null;
     });
     const target = numeric(state.target.targetCgpa, 0, 4);
@@ -643,6 +665,9 @@ export function mountSimulator(root) {
     } else if (el.dataset.kind === 'scenario-name' || el.dataset.kind === 'scenario-credits') {
       const item = state.scenarioCourses.find((courseItem) => courseItem.id === el.dataset.course);
       if (item) item[el.dataset.kind === 'scenario-name' ? 'name' : 'creditHours'] = el.dataset.kind === 'scenario-name' ? el.value : (el.value === '' ? '' : Number(el.value));
+    } else if (el.dataset.kind === 'grade-scale' && el.value !== '') {
+      const point = Number(el.value);
+      if (Number.isFinite(point)) state.gradeScale[el.dataset.grade] = Math.min(4, Math.max(0, point));
     }
     refresh(false);
     persist();
@@ -691,8 +716,14 @@ export function mountSimulator(root) {
   root.addEventListener('focusout', (event) => {
     if (!ready) return;
     const el = event.target;
-    if (!(el instanceof HTMLInputElement) || el.type !== 'number' || el.value === '') return;
-    const bounds = el.dataset.key === 'targetCgpa' || el.id === 'target-cgpa'
+    if (!(el instanceof HTMLInputElement) || el.type !== 'number') return;
+    if (el.value === '') {
+      if (el.dataset.kind === 'grade-scale') el.value = String(state.gradeScale[el.dataset.grade]);
+      return;
+    }
+    const bounds = el.dataset.kind === 'grade-scale'
+      ? [0, 4]
+      : el.dataset.key === 'targetCgpa' || el.id === 'target-cgpa'
       ? [0, 4]
       : el.dataset.key === 'graduationCredits' || el.id === 'graduation-credits'
         ? [1, 1000]
@@ -703,6 +734,7 @@ export function mountSimulator(root) {
     if (Number.isFinite(normalized)) {
       el.value = String(normalized);
       if (el.dataset.kind === 'target') state.target[el.dataset.key] = normalized;
+      else if (el.dataset.kind === 'grade-scale') state.gradeScale[el.dataset.grade] = normalized;
       else if (el.dataset.kind === 'course-credits') {
         const item = findCourse(el.dataset.semester, el.dataset.course);
         if (item) item.creditHours = normalized;

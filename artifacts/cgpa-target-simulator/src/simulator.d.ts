@@ -18,6 +18,7 @@ export type Semester = {
 export type SimulatorState = {
   semesters: Semester[];
   scenarioCourses: Course[];
+  gradeScale: Record<Grade, number>;
   target: {
     targetCgpa: number | '';
     graduationCredits: number | '';

@@ -174,7 +174,38 @@ test('imports an exported plan and normalizes it for the tracker', () => {
     graduationCredits: 124,
     remainingSemesters: 5,
   });
-  assert.deepEqual(parseImportedState(JSON.parse(JSON.stringify(exported))), exported);
+  assert.deepEqual(parseImportedState(JSON.parse(JSON.stringify(exported))), {
+    ...exported,
+    gradeScale: { A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 },
+  });
+});
+
+test('custom university grade points consistently update current and projected CGPA', () => {
+  const plan = sharedPlan({
+    completed: [{ id: 'a', name: 'Completed A', creditHours: 3, gradeEarned: 'A' }],
+    scenarios: [{ id: 'b-plus', name: 'Projected B+', creditHours: 2, gradeEarned: 'B+' }],
+    targetCgpa: 3.6,
+    graduationCredits: 8,
+  });
+  plan.gradeScale = { A: 3.8, 'B+': 3.2, B: 2.8, 'C+': 2.4, C: 2, 'D+': 1.6, D: 1.2, F: 0 };
+
+  const metrics = derive(plan);
+  assert.ok(Math.abs(metrics.totalQualityPoints - 11.4) < 1e-10);
+  assert.ok(Math.abs(metrics.currentCumulativeGpa - 3.8) < 1e-10);
+  assert.ok(Math.abs(metrics.scenarioQualityPoints - 6.4) < 1e-10);
+  assert.ok(Math.abs(metrics.predictedCgpa - 17.8 / 5) < 1e-10);
+  assert.ok(Math.abs(metrics.requiredFutureGpa - (28.8 - 17.8) / 3) < 1e-10);
+  assert.ok(Math.abs(summarizeSemester(plan.semesters[0], plan.gradeScale).gpa - 3.8) < 1e-10);
+  assert.ok(Math.abs(summarizeCumulativeSemesters(plan.semesters, plan.gradeScale)[0].cgpa - 3.8) < 1e-10);
+  assertProductsMatch(plan);
+
+  const imported = parseImportedState(JSON.parse(JSON.stringify(plan)));
+  assert.deepEqual(imported.gradeScale, plan.gradeScale);
+  assert.ok(Math.abs(derive(imported).predictedCgpa - 17.8 / 5) < 1e-10);
+
+  const impossibleTarget = derive({ ...plan, target: { ...plan.target, targetCgpa: 4 } });
+  assert.equal(statusFor(impossibleTarget).kind, 'unreachable');
+  assert.match(statusFor(impossibleTarget).copy, /more than a 3\.80 average/);
 });
 
 test('rejects malformed or oversized plan exports instead of replacing saved work', () => {
@@ -283,4 +314,10 @@ test('migrates the previous localStorage state into IndexedDB', async () => {
   assert.equal(await storage.saveAppState(loaded.value), 'indexeddb');
   assert.equal(localStorage.getItem('studyline.cgpa-simulator.v1'), null);
   assert.equal((await storage.readSavedState()).source, 'indexeddb');
+});
+
+test('persists the selected grade scale with the saved plan', async () => {
+  const plan = sharedPlan({ gradeScale: { A: 3.9, 'B+': 3.4, B: 3, 'C+': 2.6, C: 2.2, 'D+': 1.8, D: 1.2, F: 0 } });
+  assert.equal(await storage.saveAppState(plan), 'indexeddb');
+  assert.deepEqual((await storage.readSavedState()).value, plan);
 });
