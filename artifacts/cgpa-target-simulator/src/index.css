@@ -110,6 +110,9 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .creator-popover { position: absolute; z-index: 50; bottom: calc(100% + 12px); left: 50%; width: min(350px, calc(100vw - 28px)); padding: 15px; transform: translateX(-50%); border: 1px solid hsl(var(--border)); border-radius: 14px; color: hsl(var(--foreground)); background: hsl(var(--card)); box-shadow: 0 14px 36px rgba(18, 39, 66, .18); }
 .creator-popover::after { content: ""; position: absolute; bottom: -7px; left: calc(50% - 7px); width: 12px; height: 12px; transform: rotate(45deg); border-right: 1px solid hsl(var(--border)); border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
 .creator-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; font-size: 13px; }
+.creator-avatar { display: block; width: 60px; height: 60px; flex: 0 0 60px; border: 2px solid hsl(var(--border)); border-radius: 50%; object-fit: cover; object-position: center 34%; }
+.creator-person-copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.creator-person-copy > span { color: hsl(var(--muted-foreground)); font-size: 10px; }
 .creator-close { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 8px; color: hsl(var(--muted-foreground)); background: transparent; font-size: 19px; }
 .creator-close:hover { color: hsl(var(--foreground)); background: hsl(var(--secondary)); }
 .creator-contact-row { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid hsl(var(--border)); color: inherit; font-size: 11px; text-decoration: none; }

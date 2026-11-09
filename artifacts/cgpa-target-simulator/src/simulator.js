@@ -352,7 +352,8 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
           <summary class="creator-trigger">Made by Prince Jerome Miah</summary>
           <div class="creator-popover" role="group" aria-label="Prince Jerome Miah contact details">
             <div class="creator-popover-heading">
-              <strong>Prince Jerome Miah</strong>
+              <img class="creator-avatar" src="/prince-jerome-miah.jpeg" alt="Portrait of Prince Jerome Miah" width="60" height="60" loading="lazy" decoding="async">
+              <div class="creator-person-copy"><strong>Prince Jerome Miah</strong><span>Studyline creator</span></div>
               <button type="button" class="creator-close" data-action="close-creator-contact" aria-label="Close contact details">×</button>
             </div>
             <a class="creator-contact-row" href="mailto:miahprincejerome50@gmail.com"><span>Email</span><span>miahprincejerome50@gmail.com</span></a>
