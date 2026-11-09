@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Studyline dark icon</title>
+  <defs>
+    <linearGradient id="oled" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c1b32"/>
+      <stop offset=".52" stop-color="#0a2448"/>
+      <stop offset="1" stop-color="#071426"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2=".7" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".17"/>
+      <stop offset=".4" stop-color="#55aaff" stop-opacity=".1"/>
+      <stop offset="1" stop-color="#1475ef" stop-opacity=".04"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b6e0ff" stop-opacity=".88"/>
+      <stop offset=".52" stop-color="#52aaff" stop-opacity=".62"/>
+      <stop offset="1" stop-color="#2674e5" stop-opacity=".84"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#oled)"/>
+  <rect width="512" height="512" fill="url(#glass)"/>
+  <rect x="14" y="14" width="484" height="484" rx="106" fill="none" stroke="url(#edge)" stroke-width="6"/>
+  <path d="M34 168C72 68 168 26 274 24" fill="none" stroke="#a8d9ff" stroke-opacity=".23" stroke-width="11" stroke-linecap="round"/>
+  <text x="256" y="358" text-anchor="middle" fill="#f5fbff" font-family="Georgia, 'Times New Roman', serif" font-size="302" letter-spacing="-18">s.</text>
+</svg>

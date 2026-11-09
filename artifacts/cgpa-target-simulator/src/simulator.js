@@ -459,6 +459,8 @@ export function mountSimulator(root) {
   let lastDialogTrigger = null;
   let ready = false;
   let destroyed = false;
+  let themeOverride = false;
+  const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let saveRevision = 0;
   let pendingSave = false;
   let saveInFlight = false;
@@ -569,7 +571,20 @@ export function mountSimulator(root) {
   const refresh = (saved = false) => { refreshOutputs(root, state, saved); updateChart(); };
   const setTheme = (dark, persistPreference = false) => {
     document.documentElement.classList.toggle('dark', dark);
-    if (persistPreference) void saveThemePreference(dark ? 'dark' : 'light');
+    if (persistPreference) {
+      themeOverride = true;
+      void saveThemePreference(dark ? 'dark' : 'light');
+    }
+    const favicon = document.querySelector('#theme-favicon');
+    if (favicon) {
+      const baseUrl = favicon.href.slice(0, favicon.href.lastIndexOf('/') + 1);
+      const appearance = dark ? 'dark' : 'light';
+      favicon.href = `${baseUrl}studyline-icon-${appearance}.svg`;
+      const pngFavicon = document.querySelector('#theme-favicon-png');
+      if (pngFavicon) pngFavicon.href = `${baseUrl}studyline-favicon-${appearance}.png`;
+    }
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = dark ? '#071426' : '#245fba';
     const button = root.querySelector('[data-testid="button-theme-toggle"]');
     if (button) {
       button.setAttribute('aria-pressed', String(dark));
@@ -580,7 +595,14 @@ export function mountSimulator(root) {
     }
     updateChart();
   };
-  setTheme(false);
+  const handleSystemThemeChange = (event) => {
+    if (!themeOverride && !destroyed) setTheme(event.matches);
+  };
+  if (typeof systemThemeQuery.addEventListener === 'function') {
+    systemThemeQuery.addEventListener('change', handleSystemThemeChange);
+  } else {
+    systemThemeQuery.addListener(handleSystemThemeChange);
+  }
   const flushSave = async () => {
     if (saveInFlight || !pendingSave) return;
     if (saveTimer !== null) window.clearTimeout(saveTimer);
@@ -618,6 +640,7 @@ export function mountSimulator(root) {
     if (content) content.hidden = !expanded;
   };
   render(root, state, 'Loading saved plan…', collapsedSemesters, gradeScaleExpanded);
+  setTheme(systemThemeQuery.matches);
   observeChart();
   root.setAttribute('aria-busy', 'true');
   root.inert = true;
@@ -628,8 +651,12 @@ export function mountSimulator(root) {
     const theme = await readThemePreference();
     if (destroyed) return;
     if (theme) {
+      themeOverride = true;
       setTheme(theme === 'dark');
       void saveThemePreference(theme);
+    } else {
+      themeOverride = false;
+      setTheme(systemThemeQuery.matches);
     }
     ready = true;
     root.inert = false;
@@ -1042,6 +1069,11 @@ export function mountSimulator(root) {
     window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
     window.removeEventListener('appinstalled', clearInstallPrompt);
     window.removeEventListener('pagehide', flushOnPageHide);
+    if (typeof systemThemeQuery.removeEventListener === 'function') {
+      systemThemeQuery.removeEventListener('change', handleSystemThemeChange);
+    } else {
+      systemThemeQuery.removeListener(handleSystemThemeChange);
+    }
     activityEvents.forEach((type) => document.removeEventListener(type, handleUserActivity, true));
     window.removeEventListener('blur', handleWindowBlur);
     window.removeEventListener('focus', handleWindowFocus);
