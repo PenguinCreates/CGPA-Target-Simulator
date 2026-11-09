@@ -932,7 +932,7 @@ export function mountSimulator(root) {
     idleScrollTimer = window.setTimeout(() => {
       idleScrollTimer = null;
       startAutoScroll();
-    }, 20000);
+    }, 13000);
   };
   const startAutoScroll = () => {
     if (autoScrollActive || destroyed || prefersReducedMotion() || document.visibilityState === 'hidden') return;
@@ -957,8 +957,12 @@ export function mountSimulator(root) {
         done();
         return;
       }
-      const duration = Math.min(30000, Math.max(9000, Math.abs(distance) / 0.19));
-      const segments = Math.max(1, Math.ceil(Math.abs(distance) / 650));
+      const towardContact = distance > 0;
+      const duration = towardContact
+        ? Math.min(32000, Math.max(11000, Math.abs(distance) / 0.16))
+        : Math.min(30000, Math.max(9000, Math.abs(distance) / 0.19));
+      const segmentSize = towardContact ? 450 : 650;
+      const segments = Math.max(1, Math.ceil(Math.abs(distance) / segmentSize));
       const segmentDuration = duration / segments;
       const runSegment = (segmentIndex) => {
         if (!autoScrollActive) return;
@@ -966,11 +970,12 @@ export function mountSimulator(root) {
         const segmentEnd = segmentIndex === segments - 1
           ? destination
           : start + distance * ((segmentIndex + 1) / segments);
+        const thisSegmentDuration = segmentDuration * (towardContact && segmentIndex === 0 ? 1.6 : 1);
         let startedAt = null;
         const frame = (now) => {
           if (!autoScrollActive) return;
           if (startedAt === null) startedAt = now;
-          const progress = Math.min(1, (now - startedAt) / segmentDuration);
+          const progress = Math.min(1, (now - startedAt) / thisSegmentDuration);
           const eased = 0.5 - Math.cos(Math.PI * progress) / 2;
           window.scrollTo(0, segmentStart + (segmentEnd - segmentStart) * eased);
           if (progress < 1) {
@@ -982,7 +987,7 @@ export function mountSimulator(root) {
             autoScrollPauseTimer = window.setTimeout(() => {
               autoScrollPauseTimer = null;
               runSegment(segmentIndex + 1);
-            }, 180);
+            }, towardContact ? 420 : 180);
           } else {
             done();
           }
