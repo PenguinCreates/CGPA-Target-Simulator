@@ -127,6 +127,37 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 @media (max-width: 420px) { .app-shell { padding-right: 11px; padding-left: 11px; }.top-meta .save-copy { display: none; }.text-button { font-size: 11px; }.panel-heading { flex-wrap: wrap; }.course-table-head,.course-row { grid-template-columns: minmax(74px,1fr) 55px 70px 28px; gap: 4px; }.field { padding: 7px 5px; font-size: 11px; }.field.grade { padding-left: 1px; padding-right: 1px; }.semester-summary { font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 
+/* Purchase gate */
+.paywall-page { min-height: 100dvh; display: grid; place-items: center; padding: 28px 16px; background: radial-gradient(ellipse at 12% 4%, hsl(var(--primary) / .13), transparent 43%), hsl(var(--background)); }
+.paywall-card { width: min(100%, 460px); padding: clamp(24px, 6vw, 40px); border: 1px solid hsl(var(--card-border)); border-radius: 24px; color: hsl(var(--foreground)); background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / .88)); box-shadow: 0 20px 70px hsl(var(--primary) / .12), inset 0 1px 0 rgba(255,255,255,.4); }
+.paywall-mark { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid hsl(var(--primary) / .35); border-radius: 15px; color: white; background: linear-gradient(145deg, #4389ed, hsl(var(--primary))); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 20px hsl(var(--primary) / .2); font: 26px var(--app-font-serif); }
+.paywall-eyebrow { margin: 22px 0 9px; color: hsl(var(--primary)); font: 600 10px var(--app-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.paywall-card h1 { margin: 0; font: 400 clamp(32px, 8vw, 42px)/1.02 var(--app-font-serif); letter-spacing: -.02em; }
+.paywall-copy { margin: 12px 0 0; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 1.6; }
+.paywall-price { display: flex; align-items: baseline; gap: 9px; margin: 23px 0 21px; padding: 16px 0; border-block: 1px solid hsl(var(--border)); }
+.paywall-price strong { color: hsl(var(--foreground)); font: 500 27px var(--app-font-mono); letter-spacing: -.06em; }
+.paywall-price span { color: hsl(var(--muted-foreground)); font-size: 11px; }
+.paywall-form { display: grid; gap: 13px; }
+.paywall-form h2 { margin: 0 0 1px; font-size: 15px; }
+.paywall-form label { display: grid; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 600; }
+.paywall-form input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--background)); }
+.paywall-form input:focus { outline: 2px solid hsl(var(--primary) / .25); border-color: hsl(var(--primary)); }
+.paywall-primary { min-height: 46px; margin-top: 4px; border: 1px solid hsl(var(--primary) / .45); border-radius: 11px; color: white; background: linear-gradient(135deg, #4389ed, hsl(var(--primary))); box-shadow: inset 0 1px 0 rgba(255,255,255,.33), 0 6px 18px hsl(var(--primary) / .2); font-size: 12px; font-weight: 700; }
+.paywall-primary:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.paywall-primary:disabled { cursor: wait; opacity: .65; }
+.paywall-switch { min-height: 36px; border: 0; color: hsl(var(--primary)); background: transparent; font-size: 11px; font-weight: 600; }
+.paywall-switch:hover { text-decoration: underline; text-underline-offset: 3px; }
+.paywall-status, .paywall-notice { margin: 13px 0 0; padding: 11px 12px; border: 1px solid hsl(var(--primary) / .2); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--primary) / .07); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.paywall-footnote { margin: 19px 0 0; color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 1.55; text-align: center; }
+.access-account { position: fixed; z-index: 80; top: 8px; right: 14px; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 28px); padding: 5px 7px 5px 11px; border: 1px solid hsl(var(--border)); border-radius: 99px; color: hsl(var(--muted-foreground)); background: hsl(var(--card) / .92); box-shadow: 0 3px 14px rgba(12,40,75,.1); font-size: 10px; }
+.access-account span { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.access-account button { padding: 6px 9px; border: 0; border-radius: 99px; color: hsl(var(--primary)); background: hsl(var(--primary) / .08); font-size: 10px; font-weight: 700; }
+.access-account button:hover { background: hsl(var(--primary) / .15); }
+.dark .paywall-card { box-shadow: 0 20px 70px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08); }
+.dark .paywall-mark { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 0 20px rgba(34,129,255,.23); }
+.dark .paywall-primary { box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 0 16px rgba(34,129,255,.16); }
+@media (max-width: 420px) { .paywall-card { border-radius: 19px; }.access-account { top: 6px; right: 8px; } }
+
 /* CGPA dashboard */
 .dashboard-shell { background: hsl(var(--background)); color: hsl(var(--foreground)); }
 .topbar { max-width: 1280px; }

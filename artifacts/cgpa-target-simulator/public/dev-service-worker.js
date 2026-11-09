@@ -53,6 +53,8 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // Never cache authenticated API responses (entitlement state is user-specific).
+  if (url.pathname.startsWith(new URL('api/', self.registration.scope).pathname)) return;
 
   if (request.mode === 'navigate' && url.pathname.startsWith(new URL(self.registration.scope).pathname)) {
     event.respondWith((async () => {

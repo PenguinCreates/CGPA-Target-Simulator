@@ -45,15 +45,13 @@ The calculation logic is shared from `lib/cgpa-calculations.js` so the web and m
 
 ### API and backend
 
-The CGPA simulator does **not** require a third-party API, account, or backend server. GPA calculations, theme preferences, and saved plans run in the browser. Dexie uses the browser's IndexedDB API for local storage; a legacy `localStorage` path is retained as a fallback. JSON import/export uses browser file APIs.
-
-The workspace also contains an API-server artifact, but the CGPA simulator does not depend on it for its core flows.
+Core GPA calculations and saved plans remain local to the browser. Paid access adds Supabase Authentication and a small set of Vercel serverless functions that initialize and verify Paystack transactions. The Paystack secret and Supabase service-role key are server-only; the browser never receives them. Supabase stores only payment and entitlement records, not students' course plans.
 
 ## Offline behavior
 
 The app is an installable Progressive Web App. After the first successful online load, its service worker can serve the app shell and locally bundled assets offline. The production build precaches the JavaScript and CSS bundles, chart code, local fonts, manifest, and icon variants. The development service worker also precaches the theme and install icons and caches other same-origin assets as they are loaded.
 
-Saved course plans and theme preferences are stored on the device, so calculations and theme switching do not need a network connection. A first visit still needs internet access so the browser can download the app and install its service worker.
+Saved course plans and theme preferences are stored on the device, so calculations and theme switching do not need a network connection. Users need an internet connection to sign in for the first time and to verify a payment. After an access check succeeds, the device remembers that verified access so the app can reopen offline on that device. This local offline check is a convenience, not tamper-proof DRM.
 
 ## Repository map
 
@@ -80,16 +78,30 @@ PORT=5173 BASE_PATH=/ pnpm --filter @workspace/cgpa-target-simulator run build
 
 ## Deploy from GitHub with Vercel
 
-The root `vercel.json` configures Vercel to build only the CGPA web app from this pnpm workspace and publish its static output. No API keys or Replit services are required.
+The root `vercel.json` configures Vercel to build the CGPA web app from this pnpm workspace. The root `api/` directory contains Vercel serverless functions for Paystack checkout, payment verification, entitlement checks, and webhooks.
 
 1. Push the repository to GitHub, including `vercel.json`.
 2. In Vercel, choose **Add New… → Project**, then import `PenguinCreates/CGPA-Target-Simulator`.
 3. Keep the project root at the repository root (`.`), so Vercel can read the workspace lockfile and packages.
 4. Use Node.js 24.x for the build.
 5. Review the detected Vite settings. The repository configuration sets the pnpm install command, build command, and output directory.
-6. Click **Deploy**. Vercel serves the generated static PWA; its service worker and offline assets are included in the output.
+6. In Supabase, create a project and run [`supabase/studyline-paywall.sql`](supabase/studyline-paywall.sql) in its SQL Editor.
+7. In Supabase Authentication settings, enable email confirmation and set the site URL to your deployed Vercel URL.
+8. Add these variables in Vercel Project Settings → Environment Variables (Production and Preview as appropriate):
 
-After deployment, open the site online once to install the service worker and cache the app for later offline use.
+   - `VITE_SUPABASE_URL` — Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` — Supabase publishable/anon key
+   - `SUPABASE_URL` — same Supabase project URL
+   - `SUPABASE_ANON_KEY` — same publishable/anon key
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service-role secret; server only
+   - `PAYSTACK_SECRET_KEY` — Paystack test secret to begin with; server only
+   - `APP_URL` — the exact deployed site origin, such as `https://your-project.vercel.app`
+
+   Never use a `VITE_` prefix for either secret key and never commit the secrets to GitHub.
+9. In Paystack Dashboard, configure the webhook URL as `https://your-project.vercel.app/api/paystack/webhook`. The checkout callback returns to the app root; the app verifies the payment server-to-server before unlocking the account.
+10. Redeploy from Vercel. Test account confirmation, an unpaid account, a successful GHS 30 test payment, and access after signing in again. Replace the test Paystack key with the live key only after those checks pass.
+
+After deployment, open the site online once to install the service worker and cache the app for later offline use. Payment and account checks require the network; after a verified access check, the device can reopen the simulator offline.
 
 ## Quality checks
 
