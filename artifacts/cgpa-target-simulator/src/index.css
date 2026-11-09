@@ -24,7 +24,7 @@
   --app-font-sans: 'DM Sans', sans-serif; --app-font-serif: 'Instrument Serif', Georgia, serif; --app-font-mono: 'IBM Plex Mono', monospace; --radius: 14px;
 }
 .dark {
-  --background: 220 42% 11%; --foreground: 210 32% 93%; --card: 220 36% 15%; --card-foreground: 210 32% 93%;
+  --background: 220 42% 9%; --foreground: 210 32% 93%; --card: 220 36% 13%; --card-foreground: 210 32% 93%;
   --card-border: 218 26% 27%; --popover: 220 36% 15%; --popover-foreground: 210 32% 93%; --popover-border: 218 26% 27%;
   --primary: 213 76% 56%; --primary-foreground: 0 0% 100%; --secondary: 218 31% 23%; --secondary-foreground: 210 32% 93%;
   --muted: 218 29% 22%; --muted-foreground: 213 17% 68%; --accent: 198 58% 37%; --accent-foreground: 210 32% 96%;
@@ -252,18 +252,18 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .button-danger { color: hsl(var(--destructive-foreground)); background: hsl(var(--destructive)); }
 .button-danger:hover { filter: brightness(.94); }
 .button, .theme-toggle, .install-button, .creator-close {
-  border: 1px solid hsl(var(--primary) / .16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.58), 0 3px 9px rgba(31,74,130,.055);
+  border: 1px solid hsl(var(--primary) / .2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 4px 12px rgba(31,74,130,.075);
   transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease;
 }
 .button-soft, .theme-toggle, .install-button {
-  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--primary) / .075));
+  background: linear-gradient(135deg, rgba(255,255,255,.62), transparent 42%), linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .12));
 }
-.button-soft { border-color: hsl(var(--primary) / .13); }
+.button-soft { border-color: hsl(var(--primary) / .18); }
 .button-primary {
-  border-color: hsl(var(--primary-foreground) / .28);
-  background: linear-gradient(180deg, hsl(var(--primary) / .91), hsl(var(--primary)));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 4px 10px hsl(var(--primary) / .2);
+  border-color: hsl(var(--primary-foreground) / .38);
+  background: linear-gradient(180deg, hsl(var(--primary) / .96), hsl(var(--primary)));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 5px 14px hsl(var(--primary) / .24);
 }
 .button-danger-soft {
   border-color: hsl(var(--destructive) / .14);
@@ -283,35 +283,35 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 }
 .button:active, .theme-toggle:active, .install-button:active { transform: translateY(0) scale(.985); }
 .panel, .semester-card, .academic-note, .creator-popover {
-  border-color: hsl(var(--primary) / .12);
-  background-image: linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .025));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 7px 20px rgba(35,78,130,.045);
+  border-color: hsl(var(--primary) / .18);
+  background-image: linear-gradient(135deg, rgba(255,255,255,.52), transparent 38%), linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .055));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.82), inset 0 -1px 0 hsl(var(--primary) / .035), 0 8px 24px rgba(35,78,130,.065);
 }
 .metric-card {
-  border-color: hsl(var(--primary) / .13);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.68), 0 6px 18px rgba(35,78,130,.055);
+  border-color: hsl(var(--primary) / .18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.82), 0 7px 21px rgba(35,78,130,.075);
 }
 .field.grade, .setting-input {
-  border-color: hsl(var(--primary) / .12);
-  background-image: linear-gradient(145deg, hsl(var(--card) / .86), hsl(var(--background) / .94));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.52);
+  border-color: hsl(var(--primary) / .17);
+  background-image: linear-gradient(135deg, rgba(255,255,255,.45), transparent 55%), linear-gradient(145deg, hsl(var(--card) / .9), hsl(var(--background) / .96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
 }
 .dark .button-soft, .dark .theme-toggle, .dark .install-button {
-  border-color: hsl(var(--primary) / .22);
-  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--primary) / .13));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 4px 12px rgba(0,0,0,.18);
+  border-color: hsl(210 100% 72% / .34);
+  background: linear-gradient(135deg, rgba(255,255,255,.14), transparent 42%), linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .2));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 0 0 1px hsl(var(--primary) / .05), 0 6px 16px rgba(0,96,255,.14);
 }
 .dark .panel, .dark .semester-card, .dark .academic-note, .dark .creator-popover {
-  border-color: hsl(var(--primary) / .2);
-  background-image: linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .055));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 8px 22px rgba(0,0,0,.17);
+  border-color: hsl(211 100% 72% / .28);
+  background-image: linear-gradient(135deg, rgba(255,255,255,.085), transparent 40%), linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .1));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.11), inset 0 0 0 1px rgba(255,255,255,.025), 0 8px 24px rgba(0,0,0,.22), 0 0 18px rgba(20,110,255,.055);
 }
 .dark .metric-card {
-  border-color: hsl(var(--primary) / .2);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 7px 20px rgba(0,0,0,.2);
+  border-color: hsl(211 100% 72% / .3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 8px 22px rgba(0,0,0,.24), 0 0 16px rgba(20,110,255,.06);
 }
 .dark .button-soft:hover, .dark .theme-toggle:hover, .dark .install-button:hover {
-  background: linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .2));
+  background: linear-gradient(135deg, rgba(255,255,255,.2), transparent 42%), linear-gradient(145deg, hsl(var(--card) / .98), hsl(var(--primary) / .26));
 }
 .confirm-dialog { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid hsl(var(--border)); border-radius: 16px; color: hsl(var(--foreground)); background: hsl(var(--card)); box-shadow: 0 22px 70px rgba(0,0,0,.22); }
 .confirm-dialog::backdrop { background: rgba(13, 28, 23, .54); backdrop-filter: blur(3px); }
