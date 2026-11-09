@@ -78,6 +78,19 @@ The Vite configuration requires both `PORT` and `BASE_PATH`. For a production bu
 PORT=5173 BASE_PATH=/ pnpm --filter @workspace/cgpa-target-simulator run build
 ```
 
+## Deploy from GitHub with Vercel
+
+The root `vercel.json` configures Vercel to build only the CGPA web app from this pnpm workspace and publish its static output. No API keys or Replit services are required.
+
+1. Push the repository to GitHub, including `vercel.json`.
+2. In Vercel, choose **Add New… → Project**, then import `PenguinCreates/CGPA-Target-Simulator`.
+3. Keep the project root at the repository root (`.`), so Vercel can read the workspace lockfile and packages.
+4. Use Node.js 24.x for the build.
+5. Review the detected Vite settings. The repository configuration sets the pnpm install command, build command, and output directory.
+6. Click **Deploy**. Vercel serves the generated static PWA; its service worker and offline assets are included in the output.
+
+After deployment, open the site online once to install the service worker and cache the app for later offline use.
+
 ## Quality checks
 
 ```bash

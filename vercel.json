@@ -1,0 +1,6 @@
+{
+  "framework": "vite",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/cgpa-target-simulator run build",
+  "outputDirectory": "artifacts/cgpa-target-simulator/dist/public"
+}
