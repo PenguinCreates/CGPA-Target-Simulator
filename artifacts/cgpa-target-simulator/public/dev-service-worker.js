@@ -1,5 +1,17 @@
-const CACHE_NAME = 'studyline-dev-runtime-v1';
+const CACHE_NAME = 'studyline-dev-runtime-v2';
 const SHELL_URL = new URL('index.html', self.registration.scope).href;
+const OFFLINE_ASSETS = [
+  SHELL_URL,
+  'manifest.webmanifest',
+  'studyline-icon-light.svg',
+  'studyline-icon-dark.svg',
+  'studyline-icon-monochrome.svg',
+  'studyline-icon-192.png',
+  'studyline-icon-512.png',
+  'studyline-touch-icon.png',
+  'studyline-favicon-light.png',
+  'studyline-favicon-dark.png',
+].map((file) => file === SHELL_URL ? file : new URL(file, self.registration.scope).href);
 const MAX_CACHE_ENTRIES = 100;
 
 function cacheKey(request) {
@@ -22,17 +34,19 @@ async function remember(cache, request, response) {
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    try {
-      await cache.add(SHELL_URL);
-    } catch {
-      // A failed first fetch must not prevent the app from loading online.
-    }
+    await cache.addAll(OFFLINE_ASSETS);
     await self.skipWaiting();
   })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names
+      .filter((name) => name.startsWith('studyline-dev-runtime-') && name !== CACHE_NAME)
+      .map((name) => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
