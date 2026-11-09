@@ -347,6 +347,20 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
         </section>
         <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span data-testid="text-grade-scale-summary">${GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · ')}</span></footer>
       </main>
+      <div class="creator-footer">
+        <details class="creator-details" data-testid="details-creator-contact">
+          <summary class="creator-trigger">Made by Prince Jerome Miah</summary>
+          <div class="creator-popover" role="group" aria-label="Prince Jerome Miah contact details">
+            <div class="creator-popover-heading">
+              <strong>Prince Jerome Miah</strong>
+              <button type="button" class="creator-close" data-action="close-creator-contact" aria-label="Close contact details">×</button>
+            </div>
+            <a class="creator-contact-row" href="mailto:miahprincejerome50@gmail.com"><span>Email</span><span>miahprincejerome50@gmail.com</span></a>
+            <a class="creator-contact-row" href="tel:0534254487"><span>Phone</span><span>0534254487</span></a>
+            <a class="creator-contact-row creator-linkedin-row" href="https://www.linkedin.com/in/prince-jerome-miah-b9331740a?utm_source=share_via&utm_content=profile&utm_medium=member_ios" target="_blank" rel="noopener noreferrer"><span>LinkedIn</span><span>https://www.linkedin.com/in/prince-jerome-miah-b9331740a?utm_source=share_via&utm_content=profile&utm_medium=member_ios</span></a>
+          </div>
+        </details>
+      </div>
       <dialog class="confirm-dialog" data-testid="dialog-confirmation" aria-labelledby="confirm-title" aria-describedby="confirm-copy">
         <div class="confirm-dialog-content">
           <span class="eyebrow">Please confirm</span>
@@ -767,9 +781,18 @@ export function mountSimulator(root) {
   });
   root.addEventListener('click', (event) => {
     if (!ready) return;
+    const creatorDetails = root.querySelector('[data-testid="details-creator-contact"]');
+    if (creatorDetails?.open && event.target instanceof Node && !creatorDetails.contains(event.target)) {
+      creatorDetails.open = false;
+    }
     const button = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!button) return;
     const { action, semester: termId, course: courseId } = button.dataset;
+    if (action === 'close-creator-contact') {
+      creatorDetails?.removeAttribute('open');
+      root.querySelector('.creator-trigger')?.focus();
+      return;
+    }
     if (action === 'toggle-theme') {
       setTheme(!document.documentElement.classList.contains('dark'), true);
       return;
