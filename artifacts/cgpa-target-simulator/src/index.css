@@ -247,6 +247,17 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
   .action-toolbar .load-menu { min-width: 0; }
   .action-toolbar .load-menu-trigger { line-height: 1.25; }
 }
+@media (max-width: 420px) {
+  .app-shell, .main-content, .topbar, .dashboard-grid, .metric-grid, .panel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .dashboard-shell { overflow-x: clip; }
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .setting-control, .setting-input { min-width: 0; max-width: 100%; }
+  .hint, .panel-kicker, .projection-copy { overflow-wrap: anywhere; }
+}
 @media print {
   @page { size: auto; margin: 14mm; }
   html, body, .dashboard-shell { min-width: 0 !important; color: #151b18 !important; background: #fff !important; }
