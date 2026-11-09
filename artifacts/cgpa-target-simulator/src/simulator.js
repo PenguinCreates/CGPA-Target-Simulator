@@ -906,6 +906,108 @@ export function mountSimulator(root) {
       if (ChartConstructor) drawChart();
     });
   };
+  let idleScrollTimer = null;
+  let autoScrollPauseTimer = null;
+  let autoScrollFrame = null;
+  let autoScrollActive = false;
+  let previousScrollBehavior = '';
+  const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const clearAutoScrollTimers = () => {
+    if (idleScrollTimer !== null) window.clearTimeout(idleScrollTimer);
+    if (autoScrollPauseTimer !== null) window.clearTimeout(autoScrollPauseTimer);
+    if (autoScrollFrame !== null) window.cancelAnimationFrame(autoScrollFrame);
+    idleScrollTimer = null;
+    autoScrollPauseTimer = null;
+    autoScrollFrame = null;
+  };
+  const stopAutoScroll = () => {
+    clearAutoScrollTimers();
+    if (autoScrollActive) document.documentElement.style.scrollBehavior = previousScrollBehavior;
+    autoScrollActive = false;
+  };
+  const scheduleIdleAutoScroll = () => {
+    if (idleScrollTimer !== null) window.clearTimeout(idleScrollTimer);
+    idleScrollTimer = null;
+    if (destroyed || prefersReducedMotion() || document.visibilityState === 'hidden') return;
+    idleScrollTimer = window.setTimeout(() => {
+      idleScrollTimer = null;
+      startAutoScroll();
+    }, 30000);
+  };
+  const startAutoScroll = () => {
+    if (autoScrollActive || destroyed || prefersReducedMotion() || document.visibilityState === 'hidden') return;
+    if (idleScrollTimer !== null) window.clearTimeout(idleScrollTimer);
+    idleScrollTimer = null;
+    autoScrollActive = true;
+    previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+
+    const pauseThen = (callback) => {
+      if (!autoScrollActive) return;
+      autoScrollPauseTimer = window.setTimeout(() => {
+        autoScrollPauseTimer = null;
+        callback();
+      }, 10000);
+    };
+    const animateTo = (destination, done) => {
+      if (!autoScrollActive) return;
+      const start = window.scrollY;
+      const distance = destination - start;
+      if (Math.abs(distance) < 2) {
+        done();
+        return;
+      }
+      const duration = Math.min(10000, Math.max(4500, Math.abs(distance) / 0.5));
+      let startedAt = null;
+      const frame = (now) => {
+        if (!autoScrollActive) return;
+        if (startedAt === null) startedAt = now;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 0.5 - Math.cos(Math.PI * progress) / 2;
+        window.scrollTo(0, start + distance * eased);
+        if (progress < 1) autoScrollFrame = window.requestAnimationFrame(frame);
+        else {
+          autoScrollFrame = null;
+          done();
+        }
+      };
+      autoScrollFrame = window.requestAnimationFrame(frame);
+    };
+    const scrollToTop = () => animateTo(0, () => pauseThen(scrollToContact));
+    const scrollToContact = () => {
+      const contact = root.querySelector('.creator-trigger');
+      if (!contact) {
+        stopAutoScroll();
+        return;
+      }
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const contactTop = contact.getBoundingClientRect().top + window.scrollY;
+      const destination = Math.min(maxScroll, Math.max(0, contactTop - window.innerHeight * 0.68));
+      animateTo(destination, () => pauseThen(scrollToTop));
+    };
+    scrollToContact();
+  };
+  const handleUserActivity = () => {
+    stopAutoScroll();
+    scheduleIdleAutoScroll();
+  };
+  const handleWindowBlur = () => {
+    if (document.visibilityState === 'visible') startAutoScroll();
+  };
+  const handleWindowFocus = () => {
+    stopAutoScroll();
+    scheduleIdleAutoScroll();
+  };
+  const handleVisibilityChange = () => {
+    stopAutoScroll();
+    if (document.visibilityState === 'visible') scheduleIdleAutoScroll();
+  };
+  const activityEvents = ['pointerdown', 'click', 'keydown', 'input', 'change', 'wheel', 'touchstart'];
+  activityEvents.forEach((type) => document.addEventListener(type, handleUserActivity, true));
+  window.addEventListener('blur', handleWindowBlur);
+  window.addEventListener('focus', handleWindowFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  scheduleIdleAutoScroll();
   if ('requestIdleCallback' in window) {
     chartIdleHandle = window.requestIdleCallback(warmChart, { timeout: 700 });
   } else {
@@ -918,6 +1020,11 @@ export function mountSimulator(root) {
     window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
     window.removeEventListener('appinstalled', clearInstallPrompt);
     window.removeEventListener('pagehide', flushOnPageHide);
+    activityEvents.forEach((type) => document.removeEventListener(type, handleUserActivity, true));
+    window.removeEventListener('blur', handleWindowBlur);
+    window.removeEventListener('focus', handleWindowFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    stopAutoScroll();
     if (gradeScaleAutoCollapseTimer !== null) window.clearTimeout(gradeScaleAutoCollapseTimer);
     if (chartObserver) chartObserver.disconnect();
     if (chartIdleHandle !== null) {
