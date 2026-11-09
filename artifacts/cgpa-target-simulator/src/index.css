@@ -41,8 +41,8 @@
   --font-sans: var(--app-font-sans);
 }
 * { box-sizing: border-box; }
-html { min-width: 320px; scroll-behavior: smooth; }
-body { margin: 0; min-height: 100dvh; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--app-font-sans); -webkit-font-smoothing: antialiased; }
+html { min-width: 320px; scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; min-height: 100dvh; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--app-font-sans); -webkit-font-smoothing: antialiased; -webkit-overflow-scrolling: touch; }
 button, input, select { font: inherit; } button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, .load-menu-trigger:focus-visible { outline: 3px solid hsl(var(--primary) / .25); outline-offset: 2px; }
 .app-shell { min-height: 100dvh; padding: 0 28px 64px; }
@@ -254,6 +254,15 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
     max-width: 100%;
   }
   .dashboard-shell { overflow-x: clip; }
+  .semester-card, .semester-head, .semester-label { min-width: 0; max-width: 100%; }
+  .semester-card { overflow: hidden; }
+  .semester-head { width: 100%; gap: 6px; }
+  .semester-label { flex: 1 1 auto; }
+  .semester-name { width: min(100px, 100%); min-width: 0; flex: 0 1 100px; }
+  .semester-summary { flex: 0 1 74px; max-width: 74px; white-space: normal; overflow-wrap: anywhere; text-align: right; line-height: 1.25; font-size: 8px; }
+  .course-table-head, .course-row { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) 42px 54px 22px; gap: 3px; }
+  .course-table-head > *, .course-row > * { min-width: 0; }
+  .course-row { padding-right: 2px; padding-left: 2px; }
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .setting-control, .setting-input { min-width: 0; max-width: 100%; }
   .hint, .panel-kicker, .projection-copy { overflow-wrap: anywhere; }
