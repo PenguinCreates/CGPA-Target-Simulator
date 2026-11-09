@@ -942,12 +942,12 @@ export function mountSimulator(root) {
     previousScrollBehavior = document.documentElement.style.scrollBehavior;
     document.documentElement.style.scrollBehavior = 'auto';
 
-    const pauseThen = (callback) => {
+    const pauseThen = (callback, duration = 4000) => {
       if (!autoScrollActive) return;
       autoScrollPauseTimer = window.setTimeout(() => {
         autoScrollPauseTimer = null;
         callback();
-      }, 4000);
+      }, duration);
     };
     const animateTo = (destination, done) => {
       if (!autoScrollActive) return;
@@ -961,8 +961,7 @@ export function mountSimulator(root) {
       const duration = towardContact
         ? Math.min(32000, Math.max(11000, Math.abs(distance) / 0.16))
         : Math.min(30000, Math.max(9000, Math.abs(distance) / 0.19));
-      const segmentSize = towardContact ? 450 : 650;
-      const segments = Math.max(1, Math.ceil(Math.abs(distance) / segmentSize));
+      const segments = 4;
       const segmentDuration = duration / segments;
       const runSegment = (segmentIndex) => {
         if (!autoScrollActive) return;
@@ -987,7 +986,7 @@ export function mountSimulator(root) {
             autoScrollPauseTimer = window.setTimeout(() => {
               autoScrollPauseTimer = null;
               runSegment(segmentIndex + 1);
-            }, towardContact ? 420 : 180);
+            }, 180);
           } else {
             done();
           }
@@ -996,7 +995,7 @@ export function mountSimulator(root) {
       };
       runSegment(0);
     };
-    const scrollToTop = () => animateTo(0, () => pauseThen(scrollToContact));
+    const scrollToTop = () => animateTo(0, () => pauseThen(scrollToContact, 4000));
     const scrollToContact = () => {
       const contact = root.querySelector('.creator-trigger');
       if (!contact) {
@@ -1006,7 +1005,7 @@ export function mountSimulator(root) {
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
       const contactTop = contact.getBoundingClientRect().top + window.scrollY;
       const destination = Math.min(maxScroll, Math.max(0, contactTop - window.innerHeight * 0.68));
-      animateTo(destination, () => pauseThen(scrollToTop));
+      animateTo(destination, () => pauseThen(scrollToTop, 3000));
     };
     scrollToContact();
   };
