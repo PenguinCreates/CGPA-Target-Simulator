@@ -235,7 +235,7 @@ function scenarioCourseMarkup(c) {
   </div>`;
 }
 
-function render(root, state, saved = true, collapsedSemesters = new Set()) {
+function render(root, state, saved = true, collapsedSemesters = new Set(), gradeScaleExpanded = true) {
   const data = derive(state);
   const cumulativeSummaries = summarizeCumulativeSemesters(state.semesters, state.gradeScale);
   const currentGpa = data.currentCumulativeGpa;
@@ -302,9 +302,15 @@ function render(root, state, saved = true, collapsedSemesters = new Set()) {
               <div class="setting-control"><label class="input-label" for="remaining-semesters">Semesters left</label><input id="remaining-semesters" class="setting-input" data-kind="target" data-key="remainingSemesters" data-testid="input-remaining-semesters" type="number" min="0" max="20" step="1" value="${escaped(state.target.remainingSemesters)}" aria-describedby="semesters-hint"><p class="hint" id="semesters-hint">Used to estimate credits per term.</p></div>
             </div>
             <section class="grade-scale-settings" aria-labelledby="grade-scale-title">
-              <h3 class="breakdown-title" id="grade-scale-title">University grade scale</h3>
-              <p class="hint">Set the point value used for each letter grade (0–4.00).</p>
-              <div class="grade-scale-grid">${gradeScaleMarkup(state.gradeScale)}</div>
+              <h3 class="breakdown-title grade-scale-title" id="grade-scale-title">
+                <button type="button" class="grade-scale-toggle" data-action="toggle-grade-scale" data-testid="button-toggle-grade-scale" aria-expanded="${gradeScaleExpanded}" aria-controls="grade-scale-content">
+                  <span>University grade scale</span><span class="grade-scale-chevron" aria-hidden="true">⌄</span>
+                </button>
+              </h3>
+              <div id="grade-scale-content" class="grade-scale-content" ${gradeScaleExpanded ? '' : 'hidden'}>
+                <p class="hint">Set the point value used for each letter grade (0–4.00).</p>
+                <div class="grade-scale-grid">${gradeScaleMarkup(state.gradeScale)}</div>
+              </div>
             </section>
             <section class="projection-box" aria-live="polite" aria-atomic="true">
               <div class="projection-label">Required GPA for remaining credits</div>
@@ -442,6 +448,9 @@ export function mountSimulator(root) {
   let pendingSave = false;
   let saveInFlight = false;
   let saveTimer = null;
+  let gradeScaleAutoCollapseTimer = null;
+  let gradeScaleExpanded = true;
+  let gradeScaleUserToggled = false;
   let deferredInstallPrompt = null;
   const collapsedSemesters = new Set();
   const drawChart = () => {
@@ -585,8 +594,15 @@ export function mountSimulator(root) {
     if (immediate) return flushSave();
     saveTimer = window.setTimeout(() => { void flushSave(); }, 180);
   };
-  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters); refresh(saved); observeChart(); };
-  render(root, state, 'Loading saved plan…', collapsedSemesters);
+  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters, gradeScaleExpanded); refresh(saved); observeChart(); };
+  const setGradeScaleExpanded = (expanded) => {
+    gradeScaleExpanded = expanded;
+    const toggle = root.querySelector('[data-testid="button-toggle-grade-scale"]');
+    const content = root.querySelector('#grade-scale-content');
+    if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
+    if (content) content.hidden = !expanded;
+  };
+  render(root, state, 'Loading saved plan…', collapsedSemesters, gradeScaleExpanded);
   observeChart();
   root.setAttribute('aria-busy', 'true');
   root.inert = true;
@@ -604,6 +620,9 @@ export function mountSimulator(root) {
     root.inert = false;
     root.setAttribute('aria-busy', 'false');
     paint(saved.source === 'indexeddb');
+    gradeScaleAutoCollapseTimer = window.setTimeout(() => {
+      if (!gradeScaleUserToggled && !destroyed) setGradeScaleExpanded(false);
+    }, 26000);
     if (saved.source !== 'indexeddb') await persist(true);
   })();
   const findCourse = (termId, courseId) => state.semesters.find((term) => term.id === termId)?.courses.find((item) => item.id === courseId);
@@ -755,6 +774,15 @@ export function mountSimulator(root) {
       setTheme(!document.documentElement.classList.contains('dark'), true);
       return;
     }
+    if (action === 'toggle-grade-scale') {
+      gradeScaleUserToggled = true;
+      if (gradeScaleAutoCollapseTimer !== null) {
+        window.clearTimeout(gradeScaleAutoCollapseTimer);
+        gradeScaleAutoCollapseTimer = null;
+      }
+      setGradeScaleExpanded(!gradeScaleExpanded);
+      return;
+    }
     if (action === 'install-app') {
       if (deferredInstallPrompt) {
         const installPrompt = deferredInstallPrompt;
@@ -866,6 +894,7 @@ export function mountSimulator(root) {
     window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
     window.removeEventListener('appinstalled', clearInstallPrompt);
     window.removeEventListener('pagehide', flushOnPageHide);
+    if (gradeScaleAutoCollapseTimer !== null) window.clearTimeout(gradeScaleAutoCollapseTimer);
     if (chartObserver) chartObserver.disconnect();
     if (chartIdleHandle !== null) {
       if (chartIdleUsesTimeout) window.clearTimeout(chartIdleHandle);
