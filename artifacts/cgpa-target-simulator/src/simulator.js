@@ -932,7 +932,7 @@ export function mountSimulator(root) {
     idleScrollTimer = window.setTimeout(() => {
       idleScrollTimer = null;
       startAutoScroll();
-    }, 30000);
+    }, 20000);
   };
   const startAutoScroll = () => {
     if (autoScrollActive || destroyed || prefersReducedMotion() || document.visibilityState === 'hidden') return;
@@ -947,7 +947,7 @@ export function mountSimulator(root) {
       autoScrollPauseTimer = window.setTimeout(() => {
         autoScrollPauseTimer = null;
         callback();
-      }, 10000);
+      }, 4000);
     };
     const animateTo = (destination, done) => {
       if (!autoScrollActive) return;
@@ -957,21 +957,39 @@ export function mountSimulator(root) {
         done();
         return;
       }
-      const duration = Math.min(10000, Math.max(4500, Math.abs(distance) / 0.5));
-      let startedAt = null;
-      const frame = (now) => {
+      const duration = Math.min(30000, Math.max(9000, Math.abs(distance) / 0.19));
+      const segments = Math.max(1, Math.ceil(Math.abs(distance) / 650));
+      const segmentDuration = duration / segments;
+      const runSegment = (segmentIndex) => {
         if (!autoScrollActive) return;
-        if (startedAt === null) startedAt = now;
-        const progress = Math.min(1, (now - startedAt) / duration);
-        const eased = 0.5 - Math.cos(Math.PI * progress) / 2;
-        window.scrollTo(0, start + distance * eased);
-        if (progress < 1) autoScrollFrame = window.requestAnimationFrame(frame);
-        else {
+        const segmentStart = window.scrollY;
+        const segmentEnd = segmentIndex === segments - 1
+          ? destination
+          : start + distance * ((segmentIndex + 1) / segments);
+        let startedAt = null;
+        const frame = (now) => {
+          if (!autoScrollActive) return;
+          if (startedAt === null) startedAt = now;
+          const progress = Math.min(1, (now - startedAt) / segmentDuration);
+          const eased = 0.5 - Math.cos(Math.PI * progress) / 2;
+          window.scrollTo(0, segmentStart + (segmentEnd - segmentStart) * eased);
+          if (progress < 1) {
+            autoScrollFrame = window.requestAnimationFrame(frame);
+            return;
+          }
           autoScrollFrame = null;
-          done();
-        }
+          if (segmentIndex < segments - 1) {
+            autoScrollPauseTimer = window.setTimeout(() => {
+              autoScrollPauseTimer = null;
+              runSegment(segmentIndex + 1);
+            }, 180);
+          } else {
+            done();
+          }
+        };
+        autoScrollFrame = window.requestAnimationFrame(frame);
       };
-      autoScrollFrame = window.requestAnimationFrame(frame);
+      runSegment(0);
     };
     const scrollToTop = () => animateTo(0, () => pauseThen(scrollToContact));
     const scrollToContact = () => {
