@@ -235,7 +235,34 @@ function scenarioCourseMarkup(c) {
   </div>`;
 }
 
-function render(root, state, saved = true, collapsedSemesters = new Set(), gradeScaleExpanded = true) {
+function accountMarkup(account) {
+  const name = account.accountName || 'Student';
+  const email = account.accountEmail || '';
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'S';
+  return `<details class="account-float" data-testid="details-account-menu">
+    <summary class="account-bubble" aria-label="Open account menu" title="Account">
+      <span class="account-bubble-initials" aria-hidden="true">${escaped(initials)}</span>
+      <span class="account-bubble-indicator" aria-hidden="true"></span>
+    </summary>
+    <div class="account-popover">
+      <p class="account-popover-eyebrow">Studyline account</p>
+      <strong class="account-popover-name">${escaped(name)}</strong>
+      <span class="account-popover-email">${escaped(email)}</span>
+      <span class="account-access-badge"><i aria-hidden="true"></i> Lifetime access</span>
+      <button type="button" class="account-signout" data-action="account-signout" data-testid="button-account-signout">
+        <span aria-hidden="true">↗</span> Sign out
+      </button>
+    </div>
+  </details>`;
+}
+
+function render(root, state, saved = true, collapsedSemesters = new Set(), gradeScaleExpanded = true, account = {}) {
   const data = derive(state);
   const cumulativeSummaries = summarizeCumulativeSemesters(state.semesters, state.gradeScale);
   const currentGpa = data.currentCumulativeGpa;
@@ -251,6 +278,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
           <span class="save-indicator" role="status" data-testid="status-save"><i class="save-dot"></i><span class="save-copy">${typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…'}</span></span>
           <button type="button" class="install-button" data-action="install-app" data-testid="button-install-app">＋ Add app</button>
           <button type="button" class="theme-toggle" data-action="toggle-theme" data-testid="button-theme-toggle" aria-label="Switch color theme" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
+          ${accountMarkup(account)}
         </div>
       </header>
       <main class="main-content mx-auto w-full max-w-7xl">
@@ -444,7 +472,7 @@ function refreshOutputs(root, state, saved) {
   if (save) save.textContent = typeof saved === 'string' ? saved : saved ? 'Saved offline on this device' : 'Saving…';
 }
 
-export function mountSimulator(root) {
+export function mountSimulator(root, account = {}) {
   let state = sampleState();
   let chart = null;
   let chartCanvas = null;
@@ -631,7 +659,7 @@ export function mountSimulator(root) {
     if (immediate) return flushSave();
     saveTimer = window.setTimeout(() => { void flushSave(); }, 180);
   };
-  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters, gradeScaleExpanded); refresh(saved); observeChart(); };
+  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters, gradeScaleExpanded, account); refresh(saved); observeChart(); };
   const setGradeScaleExpanded = (expanded) => {
     gradeScaleExpanded = expanded;
     const toggle = root.querySelector('[data-testid="button-toggle-grade-scale"]');
@@ -639,7 +667,7 @@ export function mountSimulator(root) {
     if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
     if (content) content.hidden = !expanded;
   };
-  render(root, state, 'Loading saved plan…', collapsedSemesters, gradeScaleExpanded);
+  render(root, state, 'Loading saved plan…', collapsedSemesters, gradeScaleExpanded, account);
   setTheme(systemThemeQuery.matches);
   observeChart();
   root.setAttribute('aria-busy', 'true');
@@ -823,6 +851,10 @@ export function mountSimulator(root) {
     }
     if (action === 'toggle-theme') {
       setTheme(!document.documentElement.classList.contains('dark'), true);
+      return;
+    }
+    if (action === 'account-signout') {
+      void account.onSignOut?.();
       return;
     }
     if (action === 'toggle-grade-scale') {

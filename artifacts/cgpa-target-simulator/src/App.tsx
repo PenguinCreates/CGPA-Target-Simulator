@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { mountSimulator } from './simulator.js';
 
@@ -35,6 +35,9 @@ function AccessGate() {
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const signOut = useCallback(() => {
+    void supabase?.auth.signOut();
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -143,11 +146,16 @@ function AccessGate() {
   if (hasAccess && session) {
     return (
       <div className="access-app">
-        <div className="access-account">
-          <span>{session.user.email}</span>
-          <button type="button" onClick={() => void supabase?.auth.signOut()}>Sign out</button>
-        </div>
-        <Simulator />
+        <Simulator
+          accountName={
+            (typeof session.user.user_metadata?.full_name === 'string' && session.user.user_metadata.full_name)
+            || (typeof session.user.user_metadata?.name === 'string' && session.user.user_metadata.name)
+            || session.user.email?.split('@')[0]
+            || 'Student'
+          }
+          accountEmail={session.user.email || ''}
+          onSignOut={signOut}
+        />
       </div>
     );
   }
@@ -193,12 +201,20 @@ function AccessGate() {
   );
 }
 
-function Simulator() {
+function Simulator({
+  accountName,
+  accountEmail,
+  onSignOut,
+}: {
+  accountName: string;
+  accountEmail: string;
+  onSignOut: () => void;
+}) {
   const mountRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!mountRef.current) return;
-    return mountSimulator(mountRef.current);
-  }, []);
+    return mountSimulator(mountRef.current, { accountName, accountEmail, onSignOut });
+  }, [accountName, accountEmail, onSignOut]);
   return <div ref={mountRef} />;
 }
 

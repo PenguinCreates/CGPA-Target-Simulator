@@ -149,14 +149,65 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .paywall-switch:hover { text-decoration: underline; text-underline-offset: 3px; }
 .paywall-status, .paywall-notice { margin: 13px 0 0; padding: 11px 12px; border: 1px solid hsl(var(--primary) / .2); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--primary) / .07); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
 .paywall-footnote { margin: 19px 0 0; color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 1.55; text-align: center; }
-.access-account { position: relative; z-index: 1; display: flex; justify-content: flex-end; align-items: center; gap: 10px; width: min(100%, 1280px); margin: 0 auto; padding: 10px 18px 0; color: hsl(var(--muted-foreground)); font-size: 11px; }
-.access-account span { max-width: min(210px, 45vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.access-account button { min-height: 34px; padding: 7px 12px; border: 1px solid hsl(var(--border)); border-radius: 9px; color: hsl(var(--primary)); background: hsl(var(--card)); font-size: 11px; font-weight: 700; cursor: pointer; }
-.access-account button:hover { background: hsl(var(--primary) / .15); }
+.top-meta { position: relative; }
+.account-float { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; }
+.account-float > summary { list-style: none; }
+.account-float > summary::-webkit-details-marker { display: none; }
+.account-bubble {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid hsl(var(--primary) / .32);
+  border-radius: 50%;
+  color: hsl(var(--foreground));
+  background: linear-gradient(145deg, hsl(var(--card) / .48), hsl(var(--primary) / .18));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 18px rgba(20,50,90,.13);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  opacity: .48;
+  cursor: pointer;
+  transition: opacity .2s ease, transform .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.account-bubble:hover, .account-bubble:focus-visible, .account-float[open] .account-bubble { opacity: 1; }
+.account-bubble:hover { transform: scale(1.04); }
+.account-bubble:focus-visible { outline: 3px solid hsl(var(--primary) / .35); outline-offset: 3px; }
+.account-bubble-initials { font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.account-bubble-indicator { position: absolute; right: 1px; bottom: 1px; width: 9px; height: 9px; border: 2px solid hsl(var(--background)); border-radius: 50%; background: #54b983; }
+.account-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  width: min(270px, calc(100vw - 32px));
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid hsl(var(--primary) / .24);
+  border-radius: 16px;
+  color: hsl(var(--foreground));
+  background: linear-gradient(145deg, hsl(var(--card) / .88), hsl(var(--background) / .78));
+  box-shadow: 0 18px 46px rgba(16,38,70,.2), inset 0 1px 0 rgba(255,255,255,.58);
+  backdrop-filter: blur(22px) saturate(1.55);
+  -webkit-backdrop-filter: blur(22px) saturate(1.55);
+  animation: account-pop-in .18s ease-out both;
+}
+.account-popover-eyebrow { margin: 0; color: hsl(var(--muted-foreground)); font: 600 9px var(--app-font-mono); letter-spacing: .11em; text-transform: uppercase; }
+.account-popover-name { overflow: hidden; color: hsl(var(--foreground)); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.account-popover-email { overflow-wrap: anywhere; color: hsl(var(--muted-foreground)); font-size: 11px; }
+.account-access-badge { display: inline-flex; align-items: center; gap: 7px; width: fit-content; margin-top: 4px; padding: 6px 9px; border: 1px solid hsl(145 42% 46% / .24); border-radius: 999px; color: hsl(145 42% 34%); background: hsl(145 42% 46% / .1); font-size: 10px; font-weight: 700; }
+.account-access-badge i { width: 6px; height: 6px; border-radius: 50%; background: #48a873; }
+.account-signout { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 5px; border: 1px solid hsl(var(--border)); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--card) / .72); font-size: 11px; font-weight: 700; transition: background .18s ease, border-color .18s ease; }
+.account-signout:hover { border-color: hsl(var(--destructive) / .35); color: hsl(var(--destructive)); background: hsl(var(--destructive) / .08); }
+.dark .account-bubble { border-color: hsl(210 100% 76% / .42); background: linear-gradient(145deg, hsl(var(--card) / .56), hsl(var(--primary) / .3)); box-shadow: inset 0 1px 0 rgba(255,255,255,.23), 0 0 20px rgba(27,108,220,.23); }
+.dark .account-popover { border-color: hsl(210 100% 76% / .25); background: linear-gradient(145deg, hsl(var(--card) / .9), hsl(220 42% 9% / .84)); box-shadow: 0 20px 55px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.13); }
+.dark .account-access-badge { color: #a8e1bb; }
+.dark .account-signout { border-color: hsl(var(--border)); background: hsl(var(--card) / .82); }
+@keyframes account-pop-in { from { opacity: 0; transform: translateY(-5px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .dark .paywall-card { box-shadow: 0 20px 70px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08); }
 .dark .paywall-mark { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 0 20px rgba(34,129,255,.23); }
 .dark .paywall-primary { box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 0 16px rgba(34,129,255,.16); }
-@media (max-width: 420px) { .paywall-card { border-radius: 19px; }.access-account { gap: 7px; padding: 8px 14px 0; }.access-account button { min-height: 32px; padding: 6px 10px; } }
+@media (max-width: 420px) { .paywall-card { border-radius: 19px; }.account-bubble { width: 38px; height: 38px; }.account-popover { width: min(250px, calc(100vw - 24px)); } }
 
 /* CGPA dashboard */
 .dashboard-shell { background: hsl(var(--background)); color: hsl(var(--foreground)); }

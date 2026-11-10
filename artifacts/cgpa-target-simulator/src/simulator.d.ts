@@ -41,4 +41,11 @@ export function statusFor(data: SimulatorMetrics): {
   label: string;
   copy: string;
 };
-export function mountSimulator(root: HTMLElement): () => void;
+export function mountSimulator(
+  root: HTMLElement,
+  account?: {
+    accountName?: string;
+    accountEmail?: string;
+    onSignOut?: () => void | Promise<void>;
+  },
+): () => void;
