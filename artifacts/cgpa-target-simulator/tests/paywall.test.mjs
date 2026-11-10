@@ -44,12 +44,16 @@ test('initializes checkout with the fixed GHS 30 price and account identity', as
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     APP_URL: process.env.APP_URL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
   };
   process.env.PAYSTACK_SECRET_KEY = 'unit-test-secret';
   process.env.SUPABASE_URL = 'https://example.supabase.co';
   process.env.SUPABASE_ANON_KEY = 'unit-test-anon';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'unit-test-service';
   process.env.APP_URL = 'https://studyline.example';
+  process.env.VERCEL_ENV = 'production';
+  process.env.VERCEL_URL = 'preview-deployment.vercel.app';
   let received;
   globalThis.fetch = async (url, init) => {
     received = { url, init, body: JSON.parse(init.body) };
@@ -69,6 +73,46 @@ test('initializes checkout with the fixed GHS 30 price and account identity', as
     assert.equal(received.body.metadata.user_id, 'auth-user-1');
     assert.equal(received.body.callback_url, 'https://studyline.example/');
     assert.equal(checkout.reference, 'test-ref');
+  } finally {
+    globalThis.fetch = oldFetch;
+    for (const [key, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('returns preview checkout to the current Vercel preview deployment', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldEnv = {
+    PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    APP_URL: process.env.APP_URL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+  };
+  process.env.PAYSTACK_SECRET_KEY = 'unit-test-secret';
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'unit-test-anon';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'unit-test-service';
+  process.env.APP_URL = 'https://studyline.example';
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL = 'studyline-preview-abc.vercel.app';
+  let received;
+  globalThis.fetch = async (_url, init) => {
+    received = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      status: true,
+      data: { authorization_url: 'https://checkout.paystack.com/test', reference: 'test-ref' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await initializePaystack({
+      user: { id: 'auth-user-1', email: 'student@example.com' },
+    });
+    assert.equal(received.callback_url, 'https://studyline-preview-abc.vercel.app/');
   } finally {
     globalThis.fetch = oldFetch;
     for (const [key, value] of Object.entries(oldEnv)) {
