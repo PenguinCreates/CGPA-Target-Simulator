@@ -3,10 +3,57 @@ import { calculateCgpaMetrics, CGPA_GRADE_POINTS, CGPA_GRADES } from '../../../l
 
 const GRADE_POINTS = CGPA_GRADE_POINTS;
 const GRADES = CGPA_GRADES;
+const ACCOUNT_BUBBLE_POSITION_KEY = 'studyline.account-bubble-position';
 let nextId = 1;
 const id = (prefix) => `${prefix}-${Date.now().toString(36)}-${nextId++}`;
 const course = (name = 'New course', grade = 'B', creditHours = 3) => ({ id: id('course'), name, creditHours, gradeEarned: grade });
 const semester = (name) => ({ id: id('semester'), name, courses: [] });
+
+function clampAccountBubblePosition(widget, x, y) {
+  const width = widget.offsetWidth || 42;
+  const height = widget.offsetHeight || 42;
+  return {
+    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - width - 8)),
+    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - height - 8)),
+  };
+}
+
+function readAccountBubblePosition() {
+  try {
+    const position = JSON.parse(localStorage.getItem(ACCOUNT_BUBBLE_POSITION_KEY) || 'null');
+    return Number.isFinite(position?.x) && Number.isFinite(position?.y)
+      ? { x: position.x, y: position.y }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function positionAccountBubble(root, currentPosition = null) {
+  const widget = root.querySelector('[data-testid="details-account-menu"]');
+  if (!widget) return currentPosition;
+  let position = currentPosition;
+  if (!position) {
+    const themeRect = root.querySelector('[data-testid="button-theme-toggle"]')?.getBoundingClientRect();
+    position = themeRect
+      ? { x: themeRect.right - (widget.offsetWidth || 42), y: themeRect.bottom + 24 }
+      : { x: window.innerWidth - 58, y: 100 };
+  }
+  position = clampAccountBubblePosition(widget, position.x, position.y);
+  widget.style.left = `${position.x}px`;
+  widget.style.top = `${position.y}px`;
+  widget.classList.toggle('account-float--left', position.x + (widget.offsetWidth || 42) / 2 < window.innerWidth / 2);
+  widget.classList.toggle('account-float--above', position.y > window.innerHeight * 0.62);
+  return position;
+}
+
+function saveAccountBubblePosition(position) {
+  try {
+    localStorage.setItem(ACCOUNT_BUBBLE_POSITION_KEY, JSON.stringify(position));
+  } catch {
+    // It remains movable for this session if storage is unavailable.
+  }
+}
 
 export function sampleState() {
   const semesterGrades = [
@@ -246,7 +293,7 @@ function accountMarkup(account) {
     .join('')
     .toUpperCase() || 'S';
   return `<details class="account-float" data-testid="details-account-menu">
-    <summary class="account-bubble" aria-label="Open account menu" title="Account">
+    <summary class="account-bubble" aria-label="Account menu. Drag to move, or use arrow keys to reposition." title="Drag to move · tap for account">
       <span class="account-bubble-initials" aria-hidden="true">${escaped(initials)}</span>
       <span class="account-bubble-indicator" aria-hidden="true"></span>
     </summary>
@@ -497,6 +544,9 @@ export function mountSimulator(root, account = {}) {
   let gradeScaleExpanded = true;
   let gradeScaleUserToggled = false;
   let deferredInstallPrompt = null;
+  let accountBubblePosition = readAccountBubblePosition();
+  let accountDrag = null;
+  let suppressAccountClickUntil = 0;
   const collapsedSemesters = new Set();
   const drawChart = () => {
     const canvas = root.querySelector('#trajectory-chart');
@@ -659,7 +709,12 @@ export function mountSimulator(root, account = {}) {
     if (immediate) return flushSave();
     saveTimer = window.setTimeout(() => { void flushSave(); }, 180);
   };
-  const paint = (saved = true) => { render(root, state, saved, collapsedSemesters, gradeScaleExpanded, account); refresh(saved); observeChart(); };
+  const paint = (saved = true) => {
+    render(root, state, saved, collapsedSemesters, gradeScaleExpanded, account);
+    accountBubblePosition = positionAccountBubble(root, accountBubblePosition);
+    refresh(saved);
+    observeChart();
+  };
   const setGradeScaleExpanded = (expanded) => {
     gradeScaleExpanded = expanded;
     const toggle = root.querySelector('[data-testid="button-toggle-grade-scale"]');
@@ -668,6 +723,7 @@ export function mountSimulator(root, account = {}) {
     if (content) content.hidden = !expanded;
   };
   render(root, state, 'Loading saved plan…', collapsedSemesters, gradeScaleExpanded, account);
+  accountBubblePosition = positionAccountBubble(root, accountBubblePosition);
   setTheme(systemThemeQuery.matches);
   observeChart();
   root.setAttribute('aria-busy', 'true');
@@ -835,7 +891,78 @@ export function mountSimulator(root, account = {}) {
       persist(true);
     }
   });
+  root.addEventListener('pointerdown', (event) => {
+    const handle = event.target instanceof Element ? event.target.closest('.account-bubble') : null;
+    if (!handle || event.button !== 0) return;
+    const widget = handle.closest('.account-float');
+    if (!widget) return;
+    const rect = widget.getBoundingClientRect();
+    accountDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      moved: false,
+      handle,
+      widget,
+    };
+    handle.setPointerCapture?.(event.pointerId);
+  });
+  root.addEventListener('pointermove', (event) => {
+    if (!accountDrag || event.pointerId !== accountDrag.pointerId) return;
+    const deltaX = event.clientX - accountDrag.startX;
+    const deltaY = event.clientY - accountDrag.startY;
+    if (!accountDrag.moved && Math.hypot(deltaX, deltaY) < 6) return;
+    accountDrag.moved = true;
+    accountDrag.widget.open = false;
+    accountDrag.widget.classList.add('is-dragging');
+    accountBubblePosition = positionAccountBubble(root, {
+      x: accountDrag.originX + deltaX,
+      y: accountDrag.originY + deltaY,
+    });
+  });
+  const finishAccountDrag = (event) => {
+    if (!accountDrag || event.pointerId !== accountDrag.pointerId) return;
+    if (accountDrag.moved) {
+      saveAccountBubblePosition(accountBubblePosition);
+      suppressAccountClickUntil = Date.now() + 350;
+      accountDrag.widget.classList.remove('is-dragging');
+    }
+    accountDrag = null;
+  };
+  root.addEventListener('pointerup', finishAccountDrag);
+  root.addEventListener('pointercancel', finishAccountDrag);
+  root.addEventListener('keydown', (event) => {
+    const handle = event.target instanceof Element ? event.target.closest('.account-bubble') : null;
+    if (!handle || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    const rect = handle.closest('.account-float').getBoundingClientRect();
+    const step = event.shiftKey ? 28 : 12;
+    const delta = {
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+    }[event.key];
+    accountBubblePosition = positionAccountBubble(root, {
+      x: rect.left + delta[0],
+      y: rect.top + delta[1],
+    });
+    saveAccountBubblePosition(accountBubblePosition);
+  });
+  const handleAccountViewportResize = () => {
+    accountBubblePosition = positionAccountBubble(root, accountBubblePosition);
+  };
+  window.addEventListener('resize', handleAccountViewportResize);
   root.addEventListener('click', (event) => {
+    if (Date.now() < suppressAccountClickUntil
+      && event.target instanceof Element
+      && event.target.closest('.account-bubble')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (!ready) return;
     const creatorDetails = root.querySelector('[data-testid="details-creator-contact"]');
     if (creatorDetails?.open && event.target instanceof Node && !creatorDetails.contains(event.target)) {
@@ -1101,6 +1228,7 @@ export function mountSimulator(root, account = {}) {
     window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
     window.removeEventListener('appinstalled', clearInstallPrompt);
     window.removeEventListener('pagehide', flushOnPageHide);
+    window.removeEventListener('resize', handleAccountViewportResize);
     if (typeof systemThemeQuery.removeEventListener === 'function') {
       systemThemeQuery.removeEventListener('change', handleSystemThemeChange);
     } else {
