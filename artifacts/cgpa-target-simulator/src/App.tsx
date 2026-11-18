@@ -4,6 +4,7 @@ import { mountSimulator } from './simulator.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const legalBaseUrl = import.meta.env.BASE_URL;
 const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -196,6 +197,13 @@ function AccessGate() {
         )}
         {message && <p className="paywall-status" role="status" aria-live="polite">{message}</p>}
         <p className="paywall-footnote">Your payment is linked to this account. Studyline stores course plans on this device.</p>
+        <nav className="paywall-legal" aria-label="Legal information">
+          <a href={`${legalBaseUrl}terms.html`}>Terms</a>
+          <span aria-hidden="true">·</span>
+          <a href={`${legalBaseUrl}privacy.html`}>Privacy</a>
+          <span aria-hidden="true">·</span>
+          <a href={`${legalBaseUrl}refunds.html`}>Refunds</a>
+        </nav>
       </section>
     </main>
   );

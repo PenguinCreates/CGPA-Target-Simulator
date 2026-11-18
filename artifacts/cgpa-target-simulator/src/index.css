@@ -149,6 +149,9 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .paywall-switch:hover { text-decoration: underline; text-underline-offset: 3px; }
 .paywall-status, .paywall-notice { margin: 13px 0 0; padding: 11px 12px; border: 1px solid hsl(var(--primary) / .2); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--primary) / .07); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
 .paywall-footnote { margin: 19px 0 0; color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 1.55; text-align: center; }
+.paywall-legal { display: flex; justify-content: center; gap: 8px; margin-top: 12px; color: hsl(var(--muted-foreground)); font-size: 10px; }
+.paywall-legal a { color: inherit; text-decoration: underline; text-decoration-color: hsl(var(--muted-foreground) / .45); text-underline-offset: 2px; }
+.paywall-legal a:hover { color: hsl(var(--primary)); }
 .top-meta { position: relative; }
 .account-float { position: fixed; z-index: 50; top: 0; left: 0; }
 .account-float--left .account-popover { right: auto; left: 0; }
