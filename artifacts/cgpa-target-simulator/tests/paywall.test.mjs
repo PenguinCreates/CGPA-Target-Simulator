@@ -36,7 +36,7 @@ test('validates Paystack webhook signatures against the raw request body', () =>
   process.env.PAYSTACK_SECRET_KEY = originalSecret;
 });
 
-test('initializes checkout with the fixed GHS 30 price and account identity', async () => {
+test('production checkout returns to the Studyline simulator after payment', async () => {
   const oldFetch = globalThis.fetch;
   const oldEnv = {
     PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
@@ -71,7 +71,7 @@ test('initializes checkout with the fixed GHS 30 price and account identity', as
     assert.equal(received.body.currency, 'GHS');
     assert.equal(received.body.email, 'student@example.com');
     assert.equal(received.body.metadata.user_id, 'auth-user-1');
-    assert.equal(received.body.callback_url, 'https://studyline.example/');
+    assert.equal(received.body.callback_url, 'https://studyline-cgpa-target-simulator.vercel.app/');
     assert.equal(checkout.reference, 'test-ref');
   } finally {
     globalThis.fetch = oldFetch;

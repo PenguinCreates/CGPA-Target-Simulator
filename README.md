@@ -95,10 +95,10 @@ The root `vercel.json` configures Vercel to build the CGPA web app from this pnp
    - `SUPABASE_ANON_KEY` — same publishable/anon key
    - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service-role secret; server only
    - `PAYSTACK_SECRET_KEY` — Paystack test secret to begin with; server only
-   - `APP_URL` — the exact deployed site origin, such as `https://your-project.vercel.app`
+   - Production Paystack checkouts return to `https://studyline-cgpa-target-simulator.vercel.app/`. Preview checkouts return to their Vercel preview URL; `APP_URL` is not required.
 
    Never use a `VITE_` prefix for either secret key and never commit the secrets to GitHub.
-9. In Paystack Dashboard, configure the webhook URL as `https://your-project.vercel.app/api/paystack/webhook`. The checkout callback returns to the app root; the app verifies the payment server-to-server before unlocking the account.
+9. In Paystack Dashboard, configure the webhook URL as `https://studyline-cgpa-target-simulator.vercel.app/api/paystack/webhook`. The checkout callback returns to the app root; the app verifies the payment server-to-server before unlocking the account.
 10. Redeploy from Vercel. Test account confirmation, an unpaid account, a successful GHS 30 test payment, and access after signing in again. Replace the test Paystack key with the live key only after those checks pass.
 
 After deployment, open the site online once to install the service worker and cache the app for later offline use. Payment and account checks require the network; after a verified access check, the device can reopen the simulator offline.
