@@ -99,7 +99,7 @@ The root `vercel.json` configures Vercel to build the CGPA web app from this pnp
 
    Never use a `VITE_` prefix for either secret key and never commit the secrets to GitHub.
 9. In Paystack Dashboard, configure the webhook URL as `https://studyline-cgpa-target-simulator.vercel.app/api/paystack/webhook`. The checkout callback returns to the app root; the app verifies the payment server-to-server before unlocking the account.
-10. Redeploy from Vercel. Test account confirmation, an unpaid account, a successful GHS 30 test payment, and access after signing in again. Replace the test Paystack key with the live key only after those checks pass.
+10. For an existing Supabase project, run [`supabase/studyline-plans-migration.sql`](supabase/studyline-plans-migration.sql) before deploying. It keeps existing active users’ lifetime access. New one-time plans are GHS 30 for six months, GHS 55 for 12 months, and GHS 199 for lifetime access. Test all three prices, expiry, and access after signing in again before using the live Paystack key.
 
 After deployment, open the site online once to install the service worker and cache the app for later offline use. Payment and account checks require the network; after a verified access check, the device can reopen the simulator offline.
 

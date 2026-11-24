@@ -18,8 +18,9 @@ export default async function handler(req, res) {
     if (!isCorrectPayment(payment, user)) {
       return res.status(402).json({ access: false, error: "Payment is not verified for this account." });
     }
-    await recordVerifiedPayment({ userId: user.id, email: user.email, reference });
-    return res.status(200).json({ access: true });
+    const planId = payment.metadata.plan_id;
+    const entitlement = await recordVerifiedPayment({ userId: user.id, email: user.email, reference, planId });
+    return res.status(200).json(entitlement);
   } catch {
     return res.status(503).json({ error: "Payment verification is temporarily unavailable." });
   }

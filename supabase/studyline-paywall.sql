@@ -3,9 +3,10 @@ create table if not exists public.studyline_payments (
   reference text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   email text not null,
-  amount integer not null check (amount = 3000),
+  amount integer not null check (amount in (3000, 5500, 19900)),
   currency text not null check (currency = 'GHS'),
   status text not null check (status = 'success'),
+  plan_id text not null default 'lifetime' check (plan_id in ('six_months', 'twelve_months', 'lifetime')),
   created_at timestamptz not null default now()
 );
 
@@ -13,8 +14,10 @@ create table if not exists public.studyline_entitlements (
   user_id uuid primary key references auth.users(id) on delete cascade,
   active boolean not null default false,
   payment_reference text not null unique references public.studyline_payments(reference),
-  amount integer not null check (amount = 3000),
+  amount integer not null check (amount in (3000, 5500, 19900)),
   currency text not null check (currency = 'GHS'),
+  plan_id text not null default 'lifetime' check (plan_id in ('six_months', 'twelve_months', 'lifetime')),
+  expires_at timestamptz,
   granted_at timestamptz not null default now()
 );
 

@@ -11,7 +11,7 @@ const supabase = supabaseUrl && supabaseAnonKey
     })
   : null;
 
-type AccessResult = { access: boolean; error?: string };
+type AccessResult = { access: boolean; expiresAt?: string | null; planId?: string | null; error?: string };
 
 async function requestAccess(session: Session, reference?: string) {
   const response = await fetch(reference ? '/api/paystack/verify' : '/api/paystack/access', {
@@ -69,12 +69,12 @@ function AccessGate() {
     const reference = new URLSearchParams(window.location.search).get('reference')
       || new URLSearchParams(window.location.search).get('trxref');
     void requestAccess(session, reference || undefined)
-      .then(({ access }) => {
+      .then(({ access, expiresAt }) => {
         if (!active) return;
         setHasAccess(access);
         try {
           const cacheKey = `studyline.verified-access.${session.user.id}`;
-          if (access) localStorage.setItem(cacheKey, '1');
+          if (access) localStorage.setItem(cacheKey, JSON.stringify({ expiresAt: expiresAt || null }));
           else localStorage.removeItem(cacheKey);
         } catch {
           // Access still works online if browser storage is unavailable.
@@ -87,7 +87,14 @@ function AccessGate() {
       .catch((error: unknown) => {
         if (!active) return;
         try {
-          const cached = localStorage.getItem(`studyline.verified-access.${session.user.id}`) === '1';
+          const cachedValue = localStorage.getItem(`studyline.verified-access.${session.user.id}`);
+          let cached = false;
+          if (cachedValue === '1') {
+            cached = true; // Preserve offline access for existing lifetime customers.
+          } else if (cachedValue) {
+            const cachedPlan = JSON.parse(cachedValue) as { expiresAt?: string | null };
+            cached = !cachedPlan.expiresAt || Date.parse(cachedPlan.expiresAt) > Date.now();
+          }
           if (cached && !reference) {
             setHasAccess(true);
             setMessage('Offline mode: using this device’s last verified access.');
@@ -124,14 +131,18 @@ function AccessGate() {
     }
   }
 
-  async function startCheckout() {
+  async function startCheckout(planId: 'six_months' | 'twelve_months' | 'lifetime') {
     if (!session) return;
     setBusy(true);
     setMessage('');
     try {
       const response = await fetch('/api/paystack/initialize', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ planId }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.authorizationUrl) {
@@ -167,8 +178,7 @@ function AccessGate() {
         <div className="paywall-mark" aria-hidden="true">S</div>
         <p className="paywall-eyebrow">Studyline · CGPA planner</p>
         <h1 id="paywall-title">Plan your degree with confidence.</h1>
-        <p className="paywall-copy">Sign in or create an account, then unlock permanent access with a one-time payment.</p>
-        <div className="paywall-price"><strong>GHS 30</strong><span>one-time payment</span></div>
+        <p className="paywall-copy">Sign in or create an account, then choose a one-time plan that fits your studies.</p>
         {!supabase ? (
           <div className="paywall-notice" role="status">
             Account setup is not connected yet. Add the Supabase project URL and public anon key to the Vercel environment before enabling access.
@@ -187,11 +197,25 @@ function AccessGate() {
           </form>
         ) : (
           <div className="paywall-form">
-            <h2>Unlock your Studyline access</h2>
-            <p className="paywall-copy">Your payment is checked securely before access is granted.</p>
-            <button className="paywall-primary" disabled={busy} type="button" onClick={() => void startCheckout()}>
-              {busy ? 'Opening Paystack…' : 'Pay GHS 30 with Paystack'}
-            </button>
+            <h2>Choose your access plan</h2>
+            <p className="paywall-copy">Each plan is paid once. Six- and 12-month access does not renew automatically.</p>
+            <div className="paywall-plans">
+              <button className="paywall-plan" disabled={busy} type="button" onClick={() => void startCheckout('six_months')}>
+                <span className="paywall-plan-duration">6 months</span>
+                <strong>GHS 30</strong>
+                <span className="paywall-plan-action">{busy ? 'Opening Paystack…' : 'Choose plan'}</span>
+              </button>
+              <button className="paywall-plan" disabled={busy} type="button" onClick={() => void startCheckout('twelve_months')}>
+                <span className="paywall-plan-duration">12 months</span>
+                <strong>GHS 55</strong>
+                <span className="paywall-plan-action">{busy ? 'Opening Paystack…' : 'Choose plan'}</span>
+              </button>
+              <button className="paywall-plan paywall-plan-lifetime" disabled={busy} type="button" onClick={() => void startCheckout('lifetime')}>
+                <span className="paywall-plan-duration">Lifetime</span>
+                <strong>GHS 199</strong>
+                <span className="paywall-plan-action">{busy ? 'Opening Paystack…' : 'Choose plan'}</span>
+              </button>
+            </div>
             <button className="paywall-switch" type="button" onClick={() => void supabase?.auth.signOut()}>Use another account</button>
           </div>
         )}

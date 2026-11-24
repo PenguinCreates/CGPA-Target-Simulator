@@ -34,7 +34,12 @@ export default async function handler(req, res) {
     if (!isCorrectPayment(payment, verifiedUser)) {
       return res.status(400).send("Payment does not match the product.");
     }
-    await recordVerifiedPayment({ userId, email, reference });
+    await recordVerifiedPayment({
+      userId,
+      email,
+      reference,
+      planId: payment.metadata.plan_id,
+    });
     return res.status(200).json({ received: true });
   } catch {
     return res.status(500).send("Webhook processing failed.");

@@ -139,6 +139,15 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .paywall-price span { color: hsl(var(--muted-foreground)); font-size: 11px; }
 .paywall-form { display: grid; gap: 13px; }
 .paywall-form h2 { margin: 0 0 1px; font-size: 15px; }
+.paywall-plans { display: grid; gap: 9px; margin-top: 3px; }
+.paywall-plan { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; min-height: 68px; padding: 11px 13px; border: 1px solid hsl(var(--border)); border-radius: 12px; color: hsl(var(--foreground)); background: hsl(var(--background) / .6); text-align: left; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.paywall-plan:hover:not(:disabled) { border-color: hsl(var(--primary) / .65); background: hsl(var(--primary) / .06); transform: translateY(-1px); }
+.paywall-plan:focus-visible { outline: 2px solid hsl(var(--primary) / .55); outline-offset: 2px; }
+.paywall-plan:disabled { cursor: wait; opacity: .7; }
+.paywall-plan-duration { color: hsl(var(--muted-foreground)); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.paywall-plan strong { grid-row: 2; font: 500 18px var(--app-font-mono); letter-spacing: -.04em; }
+.paywall-plan-action { grid-column: 2; grid-row: 1 / span 2; color: hsl(var(--primary)); font-size: 10px; font-weight: 700; }
+.paywall-plan-lifetime { border-color: hsl(var(--primary) / .35); }
 .paywall-form label { display: grid; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 600; }
 .paywall-form input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; color: hsl(var(--foreground)); background: hsl(var(--background)); }
 .paywall-form input:focus { outline: 2px solid hsl(var(--primary) / .25); border-color: hsl(var(--primary)); }
