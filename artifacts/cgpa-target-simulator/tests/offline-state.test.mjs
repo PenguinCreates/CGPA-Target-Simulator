@@ -12,7 +12,7 @@ globalThis.localStorage = (() => {
   };
 })();
 
-const { derive, parseImportedState, statusFor, summarizeCumulativeSemesters, summarizeSemester } = await import('../src/simulator.js');
+const { derive, gradeScaleChipsMarkup, parseImportedState, statusFor, summarizeCumulativeSemesters, summarizeSemester } = await import('../src/simulator.js');
 const storage = await import('../src/storage.js');
 const { calculate: calculateMobile } = await import('../../cgpa-target-mobile/lib/cgpa-calculations.ts');
 
@@ -31,6 +31,13 @@ function sharedPlan({
     target: { targetCgpa, graduationCredits, remainingSemesters },
   };
 }
+
+test('renders the current grading system as readable, wrapping grade chips', () => {
+  const markup = gradeScaleChipsMarkup({ A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0 });
+  assert.equal([...markup.matchAll(/class="grade-scale-chip"/g)].length, 8);
+  assert.ok(markup.includes('<strong>B+</strong><span>3.50</span>'));
+  assert.ok(markup.includes('<strong>F</strong><span>0.00</span>'));
+});
 
 function assertProductsMatch(plan) {
   const simulator = derive(plan);

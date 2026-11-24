@@ -41,6 +41,7 @@ export function statusFor(data: SimulatorMetrics): {
   label: string;
   copy: string;
 };
+export function gradeScaleChipsMarkup(gradeScale: Record<Grade, number>): string;
 export function mountSimulator(
   root: HTMLElement,
   account?: {

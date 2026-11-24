@@ -231,6 +231,10 @@ function gradeScaleMarkup(gradeScale) {
   </div>`).join('');
 }
 
+export function gradeScaleChipsMarkup(gradeScale) {
+  return GRADES.map((grade) => `<span class="grade-scale-chip"><strong>${grade}</strong><span>${format(gradeScale[grade], 2)}</span></span>`).join('');
+}
+
 function semesterMarkup(term, index, collapsedSemesters = new Set(), cumulativeSummary) {
   const courses = term.courses.map((c) => `
     <div class="course-row">
@@ -420,7 +424,15 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
           </div>
           <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
-        <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span data-testid="text-grade-scale-summary">${GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · ')}</span></footer>
+        <footer class="bottom-note">
+          <span class="bottom-note-copy"><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span>
+          <section class="grade-scale-summary" data-testid="text-grade-scale-summary" aria-label="Current grading system">
+            <span class="grade-scale-summary-label">Current grading system</span>
+            <div class="grade-scale-summary-items">
+              ${gradeScaleChipsMarkup(state.gradeScale)}
+            </div>
+          </section>
+        </footer>
       </main>
       <div class="creator-footer">
         <details class="creator-details" data-testid="details-creator-contact">
@@ -484,7 +496,8 @@ function refreshOutputs(root, state, saved) {
   set('text-credits-to-graduation', `${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr`);
   set('text-remaining-after-scenario', `${format(Math.max(0, data.remainingCreditsAfterScenario), 1)} cr`);
   set('text-average-credits-per-term', `${format(data.averageCreditsPerRemainingSemester, 1)} cr`);
-  set('text-grade-scale-summary', GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · '));
+  const gradeScaleSummary = root.querySelector('[data-testid="text-grade-scale-summary"] .grade-scale-summary-items');
+  if (gradeScaleSummary) gradeScaleSummary.innerHTML = gradeScaleChipsMarkup(state.gradeScale);
   set('text-predicted-cgpa', data.predictedCgpa === null ? '—' : format(data.predictedCgpa));
   set('text-scenario-summary', `${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points`);
   const scenarioWarning = root.querySelector('[data-testid="warning-scenario-credit-overage"]');
