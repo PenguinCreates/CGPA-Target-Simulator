@@ -231,10 +231,6 @@ function gradeScaleMarkup(gradeScale) {
   </div>`).join('');
 }
 
-export function gradeScaleMiniMarkup(gradeScale) {
-  return GRADES.map((grade) => `<span class="grade-scale-mini-item"><strong>${grade}</strong><span>${format(gradeScale[grade], 2)}</span></span>`).join('');
-}
-
 function semesterMarkup(term, index, collapsedSemesters = new Set(), cumulativeSummary) {
   const courses = term.courses.map((c) => `
     <div class="course-row">
@@ -427,13 +423,7 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
           </div>
           <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
-        <footer class="bottom-note">
-          <span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span>
-          <div class="bottom-note-scale" data-testid="text-grade-scale-summary" role="group" aria-label="Current grading system">
-            <span class="bottom-note-scale-title">Grading system</span>
-            <div class="bottom-note-scale-grid">${gradeScaleMiniMarkup(state.gradeScale)}</div>
-          </div>
-        </footer>
+        <footer class="bottom-note"><span><strong>Your edits stay on this device.</strong> Nothing is sent to a server.</span><span data-testid="text-grade-scale-summary">${GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · ')}</span></footer>
       </main>
       <div class="creator-footer">
         <details class="creator-details" data-testid="details-creator-contact">
@@ -497,8 +487,7 @@ function refreshOutputs(root, state, saved) {
   set('text-credits-to-graduation', `${format(Math.max(0, data.remainingCreditsToGraduation), 1)} cr`);
   set('text-remaining-after-scenario', `${format(Math.max(0, data.remainingCreditsAfterScenario), 1)} cr`);
   set('text-average-credits-per-term', `${format(data.averageCreditsPerRemainingSemester, 1)} cr`);
-  const gradeScaleSummary = root.querySelector('[data-testid="text-grade-scale-summary"] .bottom-note-scale-grid');
-  if (gradeScaleSummary) gradeScaleSummary.innerHTML = gradeScaleMiniMarkup(state.gradeScale);
+  set('text-grade-scale-summary', GRADES.map((grade) => `${grade} ${format(state.gradeScale[grade], 2)}`).join(' · '));
   set('text-predicted-cgpa', data.predictedCgpa === null ? '—' : format(data.predictedCgpa));
   set('text-scenario-summary', `${format(data.scenarioCredits, 1)} hypothetical credits · ${format(data.scenarioQualityPoints, 1)} quality points`);
   const scenarioWarning = root.querySelector('[data-testid="warning-scenario-credit-overage"]');

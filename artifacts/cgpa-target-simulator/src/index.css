@@ -106,13 +106,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .scenario-empty { margin: 0; padding: 16px 8px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .scenario-actions { display: flex; align-items: center; gap: 16px; margin-top: 13px; }
 .scenario-actions .hint { margin: 0; }
-.bottom-note { display: flex; justify-content: space-between; gap: 16px; margin-top: 21px; color: hsl(var(--muted-foreground)); font-size: 10px; }
-.bottom-note strong { color: hsl(var(--foreground)); font-weight: 600; }
-.bottom-note-scale { display: grid; gap: 4px; width: min(130px, 45%); margin-left: auto; text-align: right; }
-.bottom-note-scale-title { color: hsl(var(--muted-foreground)); font: 600 8px var(--app-font-mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }
-.bottom-note-scale-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
-.grade-scale-mini-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; color: hsl(var(--muted-foreground)); font: 9px/1.25 var(--app-font-mono); font-variant-numeric: tabular-nums; }
-.grade-scale-mini-item strong { color: hsl(var(--foreground)); font-size: 9px; }
+.bottom-note { display: flex; justify-content: space-between; gap: 16px; margin-top: 21px; color: hsl(var(--muted-foreground)); font-size: 10px; }.bottom-note strong { color: hsl(var(--foreground)); font-weight: 600; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .creator-footer { display: flex; justify-content: center; padding: 4px 0 18px; }
 .creator-details { position: relative; }
@@ -134,7 +128,7 @@ h1, h2, h3, p { margin-top: 0; } h1 { margin: 12px 0 8px; font: 400 clamp(36px, 
 .creator-linkedin-row { grid-template-columns: 1fr; gap: 4px; }
 .creator-linkedin-row > span:last-child { text-align: left; font-size: 9px; }
 @media (max-width: 900px) { .app-shell { padding-right: 20px; padding-left: 20px; }.dashboard-grid { grid-template-columns: minmax(0,1.2fr) minmax(280px,.8fr); gap: 12px; }.course-panel { padding: 16px; }.assumptions { padding: 19px 17px; }.semester-card { padding: 14px 12px 10px; }.course-table-head,.course-row { grid-template-columns: minmax(80px,1fr) 64px 78px 30px; gap: 6px; } }
-@media (max-width: 700px) { .app-shell { padding: 0 16px 38px; }.topbar { height: 64px; }.top-meta { gap: 5px; }.intro { padding: 36px 0 23px; align-items: flex-start; }.intro-side { display: none; }.intro-copy { font-size: 13px; }.dashboard-grid { grid-template-columns: 1fr; }.assumptions { position: static; grid-row: 1; }.course-panel { grid-row: 2; }.summary-strip { grid-template-columns: 1fr 1fr; }.summary-item { padding: 14px; }.summary-item:nth-child(2) { border-right: 0; }.summary-item:last-child { grid-column: 1/-1; border-top: 1px solid hsl(var(--border)); }.scenario-panel { padding: 16px; }.scenario-header { align-items: stretch; flex-direction: column; gap: 12px; }.scenario-score { text-align: left; }.scenario-actions { align-items: flex-start; flex-direction: column; gap: 8px; }.bottom-note { flex-direction: column; }.bottom-note-scale { width: min(130px, 100%); margin-left: auto; }.bottom-note-scale-title { text-align: right; } }
+@media (max-width: 700px) { .app-shell { padding: 0 16px 38px; }.topbar { height: 64px; }.top-meta { gap: 5px; }.intro { padding: 36px 0 23px; align-items: flex-start; }.intro-side { display: none; }.intro-copy { font-size: 13px; }.dashboard-grid { grid-template-columns: 1fr; }.assumptions { position: static; grid-row: 1; }.course-panel { grid-row: 2; }.summary-strip { grid-template-columns: 1fr 1fr; }.summary-item { padding: 14px; }.summary-item:nth-child(2) { border-right: 0; }.summary-item:last-child { grid-column: 1/-1; border-top: 1px solid hsl(var(--border)); }.scenario-panel { padding: 16px; }.scenario-header { align-items: stretch; flex-direction: column; gap: 12px; }.scenario-score { text-align: left; }.scenario-actions { align-items: flex-start; flex-direction: column; gap: 8px; }.bottom-note { flex-direction: column; } }
 @media (max-width: 420px) { .app-shell { padding-right: 11px; padding-left: 11px; }.top-meta .save-copy { display: none; }.text-button { font-size: 11px; }.panel-heading { flex-wrap: wrap; }.course-table-head,.course-row { grid-template-columns: minmax(74px,1fr) 55px 70px 28px; gap: 4px; }.field { padding: 7px 5px; font-size: 11px; }.field.grade { padding-left: 1px; padding-right: 1px; }.semester-summary { font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 
