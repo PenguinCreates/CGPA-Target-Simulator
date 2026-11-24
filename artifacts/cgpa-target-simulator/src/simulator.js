@@ -420,7 +420,10 @@ function render(root, state, saved = true, collapsedSemesters = new Set(), grade
           <p class="scenario-credit-warning" data-testid="warning-scenario-credit-overage" role="alert" aria-live="polite" ${data.scenarioExceedsRemainingCredits ? '' : 'hidden'}>Planned courses exceed your remaining degree credits by <strong>${format(data.scenarioCreditOverage, 1)} cr</strong>. Reduce course credits or remove a what-if course.</p>
           <div class="course-table-head scenario-table-head" aria-hidden="true"><span>Hypothetical course</span><span style="text-align:right">Credits</span><span style="text-align:center">Projected grade</span><span></span></div>
           <div class="scenario-list" data-testid="list-scenario-courses">
-            ${state.scenarioCourses.length ? state.scenarioCourses.map(scenarioCourseMarkup).join('') : '<p class="scenario-empty">No hypothetical courses yet. Add one to test how a future grade could change your predicted CGPA.</p>'}
+            ${state.scenarioCourses.length ? state.scenarioCourses.map(scenarioCourseMarkup).join('') : `<div class="course-row scenario-row scenario-empty-row">
+              <p class="scenario-empty">No hypothetical courses yet. Add one to test how a future grade could change your predicted CGPA.</p>
+              <span aria-hidden="true">—</span><span aria-hidden="true">—</span><span></span>
+            </div>`}
           </div>
           <div class="scenario-actions"><button type="button" class="button button-soft" data-action="add-scenario-course" data-testid="button-add-scenario-course">＋ Add hypothetical course</button><span class="hint">Scenario grades count in the forecast only; your completed semesters stay unchanged.</span></div>
         </section>
